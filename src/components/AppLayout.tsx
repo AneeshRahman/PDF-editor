@@ -39,6 +39,13 @@ export const AppLayout = () => (
           <ShieldCheck className="h-4 w-4 text-emerald-600" />
           Files never leave your device
         </span>
+        {/* On phones the nav is hidden, so offer a way back to the tool list. */}
+        <Link
+          to="/#tools"
+          className="ml-auto rounded-md border border-border px-3 py-1.5 text-sm font-medium md:hidden sm:ml-0"
+        >
+          Tools
+        </Link>
       </div>
     </header>
     <main className="flex-1">
