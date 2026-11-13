@@ -9,7 +9,6 @@ import { CompressTool } from "./CompressTool";
 import { CropTool } from "./CropTool";
 import { InvertTool } from "./InvertTool";
 import { ResizeTool } from "./ResizeTool";
-import { WatermarkRemovalTool } from "./WatermarkRemovalTool";
 import { WatermarkTool } from "./WatermarkTool";
 import { baseName, formatSize, type LoadedPdf, type OutputFile } from "../../lib/files";
 import { cn } from "../../lib/utils";
@@ -22,13 +21,14 @@ import {
   invertPdf,
   mergePdfs,
   parsePageRanges,
-  removeWatermarkByImage,
   resizePages,
   rotatePdf,
   splitPdf,
   type PageRange,
   type ProgressCallback,
   type WatermarkSettings,
+  type AreaSelection,
+  type PageRects,
 } from "../../lib/pdf-operations";
 
 export interface ToolPanelProps {
@@ -37,6 +37,11 @@ export interface ToolPanelProps {
   process: (op: (onProgress: ProgressCallback) => Promise<OutputFile[]>) => void;
   /** Live watermark preview (only the watermark tool uses it). */
   onPreviewWatermark?: (settings: WatermarkSettings) => void;
+  /** The area dragged on the preview (tools with areaSelect only). */
+  selection?: AreaSelection | null;
+  /** Outline boxes on the preview, e.g. the areas that will be erased. */
+  setHighlights?: (areas: PageRects | null) => void;
+  setSelection?: (selection: AreaSelection | null) => void;
 }
 
 const named = (file: LoadedPdf, suffix: string) => `${baseName(file.name)}_${suffix}.pdf`;
@@ -295,19 +300,3 @@ export const InvertPanel = ({ files, process }: ToolPanelProps) => {
   );
 };
 
-export const RemoveWatermarkPanel = ({ files, process }: ToolPanelProps) => {
-  const file = files[0];
-  return (
-    <WatermarkRemovalTool
-      onRemove={(image, threshold) =>
-        process(async (onProgress) => {
-          const { bytes, matches } = await removeWatermarkByImage(file.bytes, image, threshold, onProgress);
-          if (matches === 0) {
-            throw new Error("No matches found. Try lowering the threshold or a tighter screenshot.");
-          }
-          return [{ name: named(file, "cleaned"), bytes }];
-        })
-      }
-    />
-  );
-};

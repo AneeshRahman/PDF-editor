@@ -1,31 +1,50 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { loadPdfjsDocument, type PdfjsDocument } from "../lib/pdfjs";
 import {
   WATERMARK_FONT_SIZE,
   watermarkAnchor,
+  type AreaSelection,
+  type PageRects,
+  type Rect,
   type WatermarkPosition,
 } from "../lib/pdf-operations";
+import { cn } from "../lib/utils";
 
 interface PDFPreviewProps {
   pdfData: Uint8Array | null;
   watermarkText?: string;
   watermarkOpacity?: number;
   watermarkPosition?: WatermarkPosition;
+  /** Let the user drag a box on a page. */
+  selectable?: boolean;
+  selection?: AreaSelection | null;
+  onSelectionChange?: (selection: AreaSelection | null) => void;
+  /** Boxes to outline, e.g. areas that will be erased. */
+  highlights?: PageRects | null;
+  className?: string;
 }
 
 interface RenderedPage {
+  wrapper: HTMLDivElement;
   overlay: HTMLCanvasElement;
   width: number; // CSS px == PDF points at scale 1
   height: number;
 }
 
 const PAGE_GAP = 16;
+const MIN_SELECTION_PX = 6;
 
 export const PDFPreview = ({
   pdfData,
   watermarkText = "",
   watermarkOpacity = 0.3,
   watermarkPosition = "center",
+  selectable = false,
+  selection = null,
+  onSelectionChange,
+  highlights = null,
+  className,
 }: PDFPreviewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<RenderedPage[]>([]);
@@ -47,6 +66,7 @@ export const PDFPreview = ({
         if (cancelled) return;
 
         container.innerHTML = "";
+        setPages([]);
         const rendered: RenderedPage[] = [];
 
         for (let n = 1; n <= doc.numPages; n++) {
@@ -60,6 +80,7 @@ export const PDFPreview = ({
           wrapper.style.width = `${viewport.width}px`;
           wrapper.style.height = `${viewport.height}px`;
           wrapper.style.marginBottom = `${PAGE_GAP}px`;
+          wrapper.dataset.page = String(n);
 
           const canvas = document.createElement("canvas");
           canvas.width = Math.floor(hiDpi.width);
@@ -76,7 +97,7 @@ export const PDFPreview = ({
 
           await page.render({ canvasContext: canvas.getContext("2d")!, viewport: hiDpi, canvas }).promise;
           if (cancelled) return;
-          rendered.push({ overlay, width: viewport.width, height: viewport.height });
+          rendered.push({ wrapper, overlay, width: viewport.width, height: viewport.height });
         }
         setPages(rendered);
       } catch (err) {
@@ -114,10 +135,106 @@ export const PDFPreview = ({
     }
   }, [pages, watermarkText, watermarkOpacity, watermarkPosition]);
 
+  const interactive = selectable || (highlights && Object.keys(highlights).length > 0);
+
   return (
-    <div className="w-full h-full overflow-auto bg-muted rounded-lg p-4">
+    <div className={cn("w-full h-full overflow-auto bg-muted rounded-lg p-4", className)}>
       {error && <p className="text-sm text-destructive text-center py-8">{error}</p>}
       <div ref={containerRef} className="w-max min-w-full" />
+      {interactive &&
+        pages.map((p, i) =>
+          createPortal(
+            <PageLayer
+              pageIndex={i}
+              selectable={selectable}
+              selection={selection?.page === i ? selection.rect : null}
+              highlights={highlights?.[i] ?? []}
+              onSelect={(rect) => onSelectionChange?.(rect ? { page: i, rect } : null)}
+            />,
+            p.wrapper,
+            `layer-${i}`
+          )
+        )}
+    </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+const boxStyle = (r: Rect) => ({
+  left: `${r.x * 100}%`,
+  top: `${r.y * 100}%`,
+  width: `${r.w * 100}%`,
+  height: `${r.h * 100}%`,
+});
+
+interface PageLayerProps {
+  pageIndex: number;
+  selectable: boolean;
+  selection: Rect | null;
+  highlights: Rect[];
+  onSelect: (rect: Rect | null) => void;
+}
+
+/** Sits on top of one rendered page: drag-to-select plus highlight boxes. */
+const PageLayer = ({ pageIndex, selectable, selection, highlights, onSelect }: PageLayerProps) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const [draft, setDraft] = useState<Rect | null>(null);
+
+  const point = (e: React.PointerEvent) => {
+    const r = ref.current!.getBoundingClientRect();
+    return { x: clamp01((e.clientX - r.left) / r.width), y: clamp01((e.clientY - r.top) / r.height) };
+  };
+  const between = (a: { x: number; y: number }, b: { x: number; y: number }): Rect => ({
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    w: Math.abs(a.x - b.x),
+    h: Math.abs(a.y - b.y),
+  });
+
+  const shown = draft ?? selection;
+
+  return (
+    <div
+      ref={ref}
+      data-testid={`page-layer-${pageIndex}`}
+      className={cn("absolute inset-0", selectable && "cursor-crosshair touch-none select-none")}
+      onPointerDown={(e) => {
+        if (!selectable || e.button !== 0) return;
+        e.preventDefault();
+        ref.current!.setPointerCapture(e.pointerId);
+        start.current = point(e);
+        setDraft({ ...start.current, w: 0, h: 0 });
+      }}
+      onPointerMove={(e) => {
+        if (start.current) setDraft(between(start.current, point(e)));
+      }}
+      onPointerUp={(e) => {
+        if (!start.current) return;
+        const rect = between(start.current, point(e));
+        start.current = null;
+        setDraft(null);
+        const size = ref.current!.getBoundingClientRect();
+        const tooSmall = rect.w * size.width < MIN_SELECTION_PX || rect.h * size.height < MIN_SELECTION_PX;
+        onSelect(tooSmall ? null : rect);
+      }}
+    >
+      {highlights.map((r, i) => (
+        <div
+          key={i}
+          className="pointer-events-none absolute border-2 border-rose-500 bg-rose-500/15"
+          style={boxStyle(r)}
+        />
+      ))}
+      {shown && (
+        <div
+          className="pointer-events-none absolute border-2 border-dashed border-primary bg-primary/10"
+          style={boxStyle(shown)}
+        />
+      )}
     </div>
   );
 };

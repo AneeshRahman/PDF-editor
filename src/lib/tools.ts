@@ -16,13 +16,13 @@ import {
   CropPanel,
   InvertPanel,
   MergePanel,
-  RemoveWatermarkPanel,
   ResizePanel,
   RotatePanel,
   SplitPanel,
   WatermarkPanel,
   type ToolPanelProps,
 } from "../components/tools/panels";
+import { RemoveWatermarkPanel } from "../components/tools/RemoveWatermarkPanel";
 
 export type ToolCategory = "organize" | "optimize" | "edit";
 
@@ -41,6 +41,8 @@ export interface ToolDef {
   category: ToolCategory;
   /** Accepts several input files (shows the reorderable file grid instead of a page preview). */
   multiple?: boolean;
+  /** Lets the user drag a box on the preview (passed to the panel as `selection`). */
+  areaSelect?: boolean;
   /** Uses the live watermark overlay on the preview. */
   watermarkPreview?: boolean;
   Panel: ComponentType<ToolPanelProps>;
@@ -116,7 +118,8 @@ export const TOOLS: ToolDef[] = [
   {
     id: "remove-watermark",
     name: "Remove Watermark",
-    description: "Experimental: find a watermark from a screenshot and erase it.",
+    description: "Select a watermark on the page and erase it, or find every copy.",
+    areaSelect: true,
     icon: Eraser,
     category: "edit",
     Panel: RemoveWatermarkPanel,

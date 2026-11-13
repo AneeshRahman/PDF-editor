@@ -20,7 +20,7 @@ import {
   type OutputFile,
   type ToolOutput,
 } from "../lib/files";
-import type { ProgressCallback, WatermarkSettings } from "../lib/pdf-operations";
+import type { AreaSelection, PageRects, ProgressCallback, WatermarkSettings } from "../lib/pdf-operations";
 import { CATEGORIES, type ToolDef } from "../lib/tools";
 import { cn } from "../lib/utils";
 
@@ -38,6 +38,8 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
   const [progress, setProgress] = useState<number | null>(null);
   const [result, setResult] = useState<ToolOutput | null>(null);
   const [watermark, setWatermark] = useState<WatermarkSettings>(NO_WATERMARK);
+  const [selection, setSelection] = useState<AreaSelection | null>(null);
+  const [highlights, setHighlights] = useState<PageRects | null>(null);
 
   useEffect(() => clearHandoff(), []);
 
@@ -92,104 +94,124 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
     setResult(null);
     setFiles([]);
     setWatermark(NO_WATERMARK);
+    setSelection(null);
   };
 
   const Icon = tool.icon;
   const { Panel } = tool;
 
-  if (result) {
-    return (
-      <ResultScreen
-        tool={tool}
-        output={result}
-        onBack={() => setResult(null)}
-        onStartOver={startOver}
-        onContinue={continueWith}
-      />
-    );
-  }
+  // The workspace stays mounted (just hidden) while the result shows,
+  // so "Back to options" returns with every setting and selection intact.
+  return (
+    <>
+      {result && (
+        <ResultScreen
+          tool={tool}
+          input={files}
+          output={result}
+          onBack={() => setResult(null)}
+          onStartOver={startOver}
+          onContinue={continueWith}
+        />
+      )}
+      <div hidden={!!result}>{renderWorkspace()}</div>
+    </>
+  );
 
-  if (!files.length) {
+  function renderWorkspace() {
+    if (!files.length) {
+      return (
+        <div className="container mx-auto max-w-2xl px-4 py-12 text-center">
+          <div className={cn("mx-auto mb-4 inline-flex rounded-xl p-3", CATEGORIES[tool.category].tint)}>
+            <Icon className="h-8 w-8" />
+          </div>
+          <h1 className="text-3xl font-bold">{tool.name}</h1>
+          <p className="mt-2 text-muted-foreground">{tool.description}</p>
+          <div className="mt-8">
+            {loading ? (
+              <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-border">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <FileUploader multiple={tool.multiple} onFilesSelect={addFiles} />
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const file = files[0];
+
     return (
-      <div className="container mx-auto max-w-2xl px-4 py-12 text-center">
-        <div className={cn("mx-auto mb-4 inline-flex rounded-xl p-3", CATEGORIES[tool.category].tint)}>
-          <Icon className="h-8 w-8" />
-        </div>
-        <h1 className="text-3xl font-bold">{tool.name}</h1>
-        <p className="mt-2 text-muted-foreground">{tool.description}</p>
-        <div className="mt-8">
-          {loading ? (
-            <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-border">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
+      <div className="container mx-auto grid gap-6 px-4 py-6 lg:grid-cols-[1fr_380px]">
+        <section className="min-w-0">
+          {tool.multiple ? (
+            <FileGrid
+              files={files}
+              onReorder={setFiles}
+              onRemove={(id) => setFiles((fs) => fs.filter((f) => f.id !== id))}
+              onAdd={addFiles}
+            />
           ) : (
-            <FileUploader multiple={tool.multiple} onFilesSelect={addFiles} />
+            <div className="h-[calc(100vh-8rem)] min-h-[500px]">
+              <PDFPreview
+                pdfData={file.bytes}
+                watermarkText={tool.watermarkPreview ? watermark.text : ""}
+                watermarkOpacity={watermark.opacity}
+                watermarkPosition={watermark.position}
+                selectable={tool.areaSelect}
+                selection={selection}
+                onSelectionChange={setSelection}
+                highlights={highlights}
+              />
+            </div>
           )}
-        </div>
+        </section>
+
+        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <div className="flex items-center gap-3">
+              <span className={cn("rounded-lg p-2", CATEGORIES[tool.category].tint)}>
+                <Icon className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h1 className="font-semibold">{tool.name}</h1>
+                {!tool.multiple && (
+                  <p className="truncate text-xs text-muted-foreground" title={file.name}>
+                    {file.name} · {file.pageCount} pages · {formatSize(file.bytes.byteLength)}
+                  </p>
+                )}
+              </div>
+              {!tool.multiple && (
+                <Button variant="ghost" size="icon" onClick={startOver} disabled={busy} title="Choose another file">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            {(busy || loading) && (
+              <div className="mt-3 space-y-2">
+                <p className="flex items-center text-xs text-muted-foreground">
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                  {loading ? "Opening files…" : "Working…"}
+                </p>
+                {progress !== null && <Progress value={progress} className="h-1.5" />}
+              </div>
+            )}
+          </div>
+
+          {/* A disabled fieldset disables every button inside while an operation runs. */}
+          <fieldset disabled={busy} className="disabled:opacity-60">
+            <Panel
+              files={files}
+              process={process}
+              onPreviewWatermark={setWatermark}
+              selection={selection}
+              setSelection={setSelection}
+              setHighlights={setHighlights}
+            />
+          </fieldset>
+        </aside>
       </div>
     );
   }
-
-  const file = files[0];
-
-  return (
-    <div className="container mx-auto grid gap-6 px-4 py-6 lg:grid-cols-[1fr_380px]">
-      <section className="min-w-0">
-        {tool.multiple ? (
-          <FileGrid
-            files={files}
-            onReorder={setFiles}
-            onRemove={(id) => setFiles((fs) => fs.filter((f) => f.id !== id))}
-            onAdd={addFiles}
-          />
-        ) : (
-          <div className="h-[calc(100vh-8rem)] min-h-[500px]">
-            <PDFPreview
-              pdfData={file.bytes}
-              watermarkText={tool.watermarkPreview ? watermark.text : ""}
-              watermarkOpacity={watermark.opacity}
-              watermarkPosition={watermark.position}
-            />
-          </div>
-        )}
-      </section>
-
-      <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-center gap-3">
-            <span className={cn("rounded-lg p-2", CATEGORIES[tool.category].tint)}>
-              <Icon className="h-5 w-5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-semibold">{tool.name}</h1>
-              {!tool.multiple && (
-                <p className="truncate text-xs text-muted-foreground" title={file.name}>
-                  {file.name} · {file.pageCount} pages · {formatSize(file.bytes.byteLength)}
-                </p>
-              )}
-            </div>
-            {!tool.multiple && (
-              <Button variant="ghost" size="icon" onClick={startOver} disabled={busy} title="Choose another file">
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-          {(busy || loading) && (
-            <div className="mt-3 space-y-2">
-              <p className="flex items-center text-xs text-muted-foreground">
-                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                {loading ? "Opening files…" : "Working…"}
-              </p>
-              {progress !== null && <Progress value={progress} className="h-1.5" />}
-            </div>
-          )}
-        </div>
-
-        {/* A disabled fieldset disables every button inside while an operation runs. */}
-        <fieldset disabled={busy} className="disabled:opacity-60">
-          <Panel files={files} process={process} onPreviewWatermark={setWatermark} />
-        </fieldset>
-      </aside>
-    </div>
-  );
 };

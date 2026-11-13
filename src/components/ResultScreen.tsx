@@ -2,20 +2,25 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Download, FileArchive } from "lucide-react";
 import { Button } from "./ui/button";
+import { PDFPreview } from "./PDFPreview";
+import { PdfThumbnail } from "./PdfThumbnail";
 import { CATEGORIES, TOOLS, type ToolDef } from "../lib/tools";
-import { downloadAll, downloadFile, formatSize, type ToolOutput } from "../lib/files";
+import { downloadAll, downloadFile, formatSize, type LoadedPdf, type ToolOutput } from "../lib/files";
 import { cn } from "../lib/utils";
 
 interface ResultScreenProps {
   tool: ToolDef;
+  /** The files the tool started from, for the before/after comparison. */
+  input: LoadedPdf[];
   output: ToolOutput;
   onBack: () => void;
   onStartOver: () => void;
   onContinue: (tool: ToolDef) => void;
 }
 
-export const ResultScreen = ({ tool, output, onBack, onStartOver, onContinue }: ResultScreenProps) => {
+export const ResultScreen = ({ tool, input, output, onBack, onStartOver, onContinue }: ResultScreenProps) => {
   const [downloading, setDownloading] = useState(false);
+  const [showing, setShowing] = useState<"after" | "before">("after");
   const { files, inputSize } = output;
   const many = files.length > 1;
   const outSize = files.reduce((n, f) => n + f.bytes.byteLength, 0);
@@ -33,7 +38,7 @@ export const ResultScreen = ({ tool, output, onBack, onStartOver, onContinue }: 
   };
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-12">
+    <div className="container mx-auto max-w-4xl px-4 py-12">
       <div className="text-center">
         <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
         <h1 className="mt-4 text-2xl md:text-3xl font-bold">
@@ -65,11 +70,43 @@ export const ResultScreen = ({ tool, output, onBack, onStartOver, onContinue }: 
         </div>
       </div>
 
+      {!many && (
+        <section className="mt-10">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted-foreground">Preview</h2>
+            {input.length === 1 && (
+              <div className="inline-flex rounded-lg bg-muted p-1 text-sm" role="tablist" aria-label="Compare">
+                {(["after", "before"] as const).map((v) => (
+                  <button
+                    key={v}
+                    role="tab"
+                    aria-selected={showing === v}
+                    onClick={() => setShowing(v)}
+                    className={cn(
+                      "rounded-md px-3 py-1 capitalize transition",
+                      showing === v ? "bg-background shadow-sm font-medium" : "text-muted-foreground"
+                    )}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="h-[70vh] min-h-[420px]">
+            <PDFPreview pdfData={showing === "before" && input.length === 1 ? input[0].bytes : files[0].bytes} />
+          </div>
+        </section>
+      )}
+
       {many && (
         <ul className="mt-8 divide-y divide-border rounded-lg border border-border">
           {files.map((f, i) => (
             <li key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-              <span className="truncate">{f.name}</span>
+              <span className="flex min-w-0 items-center gap-3">
+                <PdfThumbnail bytes={f.bytes} width={36} className="shrink-0 border border-border" />
+                <span className="truncate">{f.name}</span>
+              </span>
               <span className="flex shrink-0 items-center gap-3 text-muted-foreground">
                 {formatSize(f.bytes.byteLength)}
                 <Button variant="outline" size="sm" onClick={() => downloadFile(f)}>

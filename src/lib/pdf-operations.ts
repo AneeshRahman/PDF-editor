@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
-import { loadPdfjsDocument } from "./pdfjs";
+import { loadPdfjsDocument, type PdfjsDocument } from "./pdfjs";
 
 export type WatermarkPosition = "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -180,14 +180,168 @@ export function invertPdf(bytes: Uint8Array, onProgress?: ProgressCallback) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Watermark removal by template matching (experimental)               */
+/* Watermark removal: erase selected areas / find similar areas        */
 /* ------------------------------------------------------------------ */
 
+/** A rectangle as fractions (0..1) of the displayed page, top-left origin. */
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Rectangles to act on, keyed by 0-based page index. */
+export type PageRects = Record<number, Rect[]>;
+
+/** An area the user dragged on one page of the preview. */
+export interface AreaSelection {
+  page: number;
+  rect: Rect;
+}
+
+export const countRects = (areas: PageRects) => Object.values(areas).reduce((n, r) => n + r.length, 0);
+
+const WORK_SCALE = 2; // render pages at 2x for erasing and matching
 const SEARCH_DOWNSAMPLE = 4; // match on a 1/4-size copy for speed
-const TEMPLATE_SCALES = [0.5, 0.65, 0.8, 1, 1.25, 1.5, 2];
+const MATCH_SCALES = [0.8, 0.9, 1, 1.12, 1.25]; // tolerate small size differences
 const MAX_MATCHES_PER_PAGE = 20;
 // Pixels darker than this are treated as real content (body text) and kept.
-const KEEP_DARKER_THAN = 90;
+const KEEP_DARKER_THAN = 100;
+// Found matches can be a few pixels off; grow them by this share of their size on each side.
+const MATCH_PADDING = 0.06;
+
+async function renderPage(doc: PdfjsDocument, index: number, scale: number) {
+  const page = await doc.getPage(index + 1);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+  page.cleanup();
+  return { canvas, ctx, viewport, rotation: page.rotate % 360 };
+}
+
+/** Fractional rect -> whole-pixel rect inside the canvas. */
+function toPixels(rect: Rect, canvas: HTMLCanvasElement) {
+  const x = Math.max(0, Math.floor(rect.x * canvas.width));
+  const y = Math.max(0, Math.floor(rect.y * canvas.height));
+  const x2 = Math.min(canvas.width, Math.ceil((rect.x + rect.w) * canvas.width));
+  const y2 = Math.min(canvas.height, Math.ceil((rect.y + rect.h) * canvas.height));
+  return { x, y, w: Math.max(1, x2 - x), h: Math.max(1, y2 - y) };
+}
+
+const luminance = (d: Uint8ClampedArray, i: number) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+
+type PixelBox = { x: number; y: number; w: number; h: number };
+
+// Margin (in WORK_SCALE pixels, so 2px = 1pt) kept see-through around text in a patch.
+const PATCH_TEXT_MARGIN = 2;
+
+/** Max filter: each value becomes the largest within `radius` pixels (square window). */
+function dilate(src: Float32Array, w: number, h: number, radius: number) {
+  const tmp = new Float32Array(src.length);
+  const out = new Float32Array(src.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let m = 0;
+      for (let k = Math.max(0, x - radius); k <= Math.min(w - 1, x + radius); k++) m = Math.max(m, src[y * w + k]);
+      tmp[y * w + x] = m;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let m = 0;
+      for (let k = Math.max(0, y - radius); k <= Math.min(h - 1, y + radius); k++) m = Math.max(m, tmp[k * w + x]);
+      out[y * w + x] = m;
+    }
+  }
+  return out;
+}
+
+/**
+ * Works out how to paint over a region with its own background colour (the median of its
+ * border pixels), so it also works on tinted pages. With keepDark, text darker than the
+ * background is kept.
+ *
+ * - "patch": returns a separate canvas: background colour where the watermark was, and
+ *   transparent where text is kept, so the original vector text shows through crisply.
+ * - "flatten": paints the result straight onto ctx (for pages that become one image).
+ */
+function cleanRegion(ctx: CanvasRenderingContext2D, px: PixelBox, keepDark: boolean, mode: "patch"): HTMLCanvasElement;
+function cleanRegion(ctx: CanvasRenderingContext2D, px: PixelBox, keepDark: boolean, mode: "flatten"): void;
+function cleanRegion(ctx: CanvasRenderingContext2D, px: PixelBox, keepDark: boolean, mode: "patch" | "flatten") {
+  const img = ctx.getImageData(px.x, px.y, px.w, px.h);
+  const d = img.data;
+
+  const border: number[] = [];
+  for (let x = 0; x < px.w; x++) border.push(x * 4, ((px.h - 1) * px.w + x) * 4);
+  for (let y = 1; y < px.h - 1; y++) border.push(y * px.w * 4, (y * px.w + px.w - 1) * 4);
+  border.sort((a, b) => luminance(d, a) - luminance(d, b));
+  const m = border[Math.floor(border.length / 2)];
+  const [r, g, b] = [d[m], d[m + 1], d[m + 2]];
+  const bgLum = luminance(d, m);
+  // Below darkCut: kept as-is (text). Above softCut: replaced (watermark).
+  // In between: faded toward the background, which keeps text edges smooth.
+  const darkCut = Math.min(KEEP_DARKER_THAN, bgLum - 70);
+  const softCut = Math.min(darkCut + 50, bgLum - 60);
+
+  // How much of each pixel to keep: 1 = text, 0 = watermark/background.
+  let keepMap = new Float32Array(px.w * px.h);
+  if (keepDark) {
+    for (let p = 0; p < keepMap.length; p++) {
+      keepMap[p] = Math.min(1, Math.max(0, (softCut - luminance(d, p * 4)) / (softCut - darkCut)));
+    }
+    // For patches, widen the see-through area so the original text's soft edges are never
+    // covered, whatever zoom the PDF is later viewed at.
+    if (mode === "patch") keepMap = dilate(keepMap, px.w, px.h, PATCH_TEXT_MARGIN);
+  }
+
+  for (let i = 0; i < d.length; i += 4) {
+    const keep = keepMap[i / 4];
+    if (mode === "patch") {
+      d[i] = r;
+      d[i + 1] = g;
+      d[i + 2] = b;
+      d[i + 3] = Math.round(255 * (1 - keep));
+    } else {
+      d[i] = r + (d[i] - r) * keep;
+      d[i + 1] = g + (d[i + 1] - g) * keep;
+      d[i + 2] = b + (d[i + 2] - b) * keep;
+    }
+  }
+
+  if (mode === "flatten") {
+    ctx.putImageData(img, px.x, px.y);
+    return;
+  }
+  const patch = document.createElement("canvas");
+  patch.width = px.w;
+  patch.height = px.h;
+  patch.getContext("2d")!.putImageData(img, 0, 0);
+  return patch;
+}
+
+function canvasToBytes(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg", quality?: number) {
+  return new Promise<Uint8Array>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? b.arrayBuffer().then((a) => resolve(new Uint8Array(a))) : reject(new Error("Could not encode image"))),
+      type,
+      quality
+    )
+  );
+}
+
+function cropCanvas(source: HTMLCanvasElement, px: { x: number; y: number; w: number; h: number }, scale = 1) {
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(px.w * scale));
+  c.height = Math.max(1, Math.round(px.h * scale));
+  c.getContext("2d")!.drawImage(source, px.x, px.y, px.w, px.h, 0, 0, c.width, c.height);
+  return c;
+}
 
 interface Gray {
   data: Float32Array;
@@ -206,21 +360,6 @@ function toGray(img: ImageData, step = 1): Gray {
     }
   }
   return { data, width, height };
-}
-
-async function loadImageGray(file: File, scale: number): Promise<Gray> {
-  const bitmap = await createImageBitmap(file);
-  const w = Math.max(4, Math.round(bitmap.width * scale));
-  const h = Math.max(4, Math.round(bitmap.height * scale));
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  const ctx = c.getContext("2d")!;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
-  return toGray(ctx.getImageData(0, 0, w, h));
 }
 
 /** Normalised cross-correlation of template over image. Returns best-scoring non-overlapping boxes. */
@@ -290,60 +429,131 @@ function findMatches(image: Gray, tpl: Gray, threshold: number) {
   return kept.map((k) => ({ x: k.x, y: k.y, w: tw, h: th, score: k.score }));
 }
 
+const yieldToUi = () => new Promise((r) => setTimeout(r));
+
 /**
- * Finds the watermark (from a screenshot) on each page and paints its light pixels white.
- * Works at several scales but not rotations. Dark content inside the match is kept.
+ * Uses the selected area as a template and finds similar-looking areas on the given pages.
+ * Handles small size differences, but not rotation. The selection itself is always included.
  */
-export async function removeWatermarkByImage(
+export async function findSimilarAreas(
   bytes: Uint8Array,
-  watermark: File,
+  selection: AreaSelection,
   threshold: number,
+  pageIndices: number[],
   onProgress?: ProgressCallback
-) {
-  const templates = await Promise.all(
-    TEMPLATE_SCALES.map((s) => loadImageGray(watermark, s / SEARCH_DOWNSAMPLE))
-  );
-  let totalMatches = 0;
+): Promise<PageRects> {
+  const doc = await loadPdfjsDocument(bytes);
+  try {
+    const source = await renderPage(doc, selection.page, WORK_SCALE);
+    const px = toPixels(selection.rect, source.canvas);
+    const templates = MATCH_SCALES.map((s) => {
+      const c = cropCanvas(source.canvas, px, s / SEARCH_DOWNSAMPLE);
+      return toGray(c.getContext("2d")!.getImageData(0, 0, c.width, c.height));
+    });
+    if (templates[2].width < 8 || templates[2].height < 4) {
+      throw new Error("The selected area is too small to match. Draw a slightly bigger box.");
+    }
 
-  const result = await rasterize(bytes, {
-    scale: 2,
-    quality: 0.92,
-    onProgress,
-    transform: async (ctx, canvas) => {
-      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const small = toGray(img, SEARCH_DOWNSAMPLE);
+    const found: PageRects = {};
+    for (const [n, index] of pageIndices.entries()) {
+      const { canvas, ctx } = index === selection.page ? source : await renderPage(doc, index, WORK_SCALE);
+      const gray = toGray(ctx.getImageData(0, 0, canvas.width, canvas.height), SEARCH_DOWNSAMPLE);
 
-      // Pick the scale whose best match is strongest, then use all of its hits.
+      // Use the scale whose best match is strongest.
       let best: ReturnType<typeof findMatches> = [];
       for (const tpl of templates) {
-        const m = findMatches(small, tpl, threshold);
+        const m = findMatches(gray, tpl, threshold);
         if (m.length && (!best.length || m[0].score > best[0].score)) best = m;
-        await new Promise((r) => setTimeout(r)); // keep the UI responsive
+        await yieldToUi();
       }
 
-      const d = img.data;
-      for (const box of best) {
-        const x0 = box.x * SEARCH_DOWNSAMPLE;
-        const y0 = box.y * SEARCH_DOWNSAMPLE;
-        const x1 = Math.min(canvas.width, x0 + box.w * SEARCH_DOWNSAMPLE);
-        const y1 = Math.min(canvas.height, y0 + box.h * SEARCH_DOWNSAMPLE);
-        for (let y = y0; y < y1; y++) {
-          for (let x = x0; x < x1; x++) {
-            const i = (y * canvas.width + x) * 4;
-            const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-            if (lum > KEEP_DARKER_THAN) {
-              d[i] = d[i + 1] = d[i + 2] = 255;
-            }
-          }
-        }
+      const rects = best.map((b) => {
+        const w = (b.w * SEARCH_DOWNSAMPLE) / canvas.width;
+        const h = (b.h * SEARCH_DOWNSAMPLE) / canvas.height;
+        const x = (b.x * SEARCH_DOWNSAMPLE) / canvas.width - w * MATCH_PADDING;
+        const y = (b.y * SEARCH_DOWNSAMPLE) / canvas.height - h * MATCH_PADDING;
+        const pw = w * (1 + 2 * MATCH_PADDING);
+        const ph = h * (1 + 2 * MATCH_PADDING);
+        // Clamp to the page.
+        const cx = Math.max(0, x);
+        const cy = Math.max(0, y);
+        return { x: cx, y: cy, w: Math.min(1, x + pw) - cx, h: Math.min(1, y + ph) - cy };
+      });
+      if (index === selection.page) {
+        // Guarantee the user's own selection is in the result, replacing any near-duplicate.
+        const s = selection.rect;
+        const others = rects.filter((r) => Math.abs(r.x - s.x) > s.w / 2 || Math.abs(r.y - s.y) > s.h / 2);
+        found[index] = [s, ...others];
+      } else if (rects.length) {
+        found[index] = rects;
       }
-      totalMatches += best.length;
-      ctx.putImageData(img, 0, 0);
-    },
-  });
-
-  return { bytes: result, matches: totalMatches };
+      onProgress?.(n + 1, pageIndices.length);
+    }
+    return found;
+  } finally {
+    await doc.destroy();
+  }
 }
+
+/**
+ * Erases the given areas. Only the areas are replaced (by a cleaned image patch), so
+ * everything else on the page stays as real, selectable text. Rotated pages are the
+ * exception: they are flattened to an image.
+ *
+ * Note: the patch covers the watermark. If the watermark is text, it may still be
+ * present (hidden) in the file's text layer.
+ */
+export async function eraseAreas(
+  bytes: Uint8Array,
+  areas: PageRects,
+  { keepDark = true }: { keepDark?: boolean } = {},
+  onProgress?: ProgressCallback
+) {
+  const out = await loadPdf(bytes);
+  const js = await loadPdfjsDocument(bytes);
+  const pages = Object.keys(areas)
+    .map(Number)
+    .filter((i) => areas[i]?.length)
+    .sort((a, b) => a - b);
+
+  try {
+    for (const [n, index] of pages.entries()) {
+      const { canvas, ctx, viewport, rotation } = await renderPage(js, index, WORK_SCALE);
+      const boxes = areas[index].map((r) => toPixels(r, canvas));
+
+      if (rotation === 0) {
+        const page = out.getPage(index);
+        for (const px of boxes) {
+          // Transparent where text is kept, so the original vector text stays crisp underneath.
+          const patch = await out.embedPng(await canvasToBytes(cleanRegion(ctx, px, keepDark, "patch"), "image/png"));
+          // Map the patch corners from canvas pixels to PDF user space (handles crop-box offsets).
+          const [x1, y1] = viewport.convertToPdfPoint(px.x, px.y);
+          const [x2, y2] = viewport.convertToPdfPoint(px.x + px.w, px.y + px.h);
+          page.drawImage(patch, {
+            x: Math.min(x1, x2),
+            y: Math.min(y1, y2),
+            width: Math.abs(x2 - x1),
+            height: Math.abs(y2 - y1),
+          });
+        }
+      } else {
+        // Rotated page: replace it with the cleaned image of the whole page.
+        boxes.forEach((px) => cleanRegion(ctx, px, keepDark, "flatten"));
+        const image = await out.embedJpg(await canvasToBytes(canvas, "image/jpeg", 0.92));
+        const w = viewport.width / WORK_SCALE;
+        const h = viewport.height / WORK_SCALE;
+        out.removePage(index);
+        out.insertPage(index, [w, h]).drawImage(image, { x: 0, y: 0, width: w, height: h });
+      }
+      onProgress?.(n + 1, pages.length);
+      await yieldToUi();
+    }
+  } finally {
+    await js.destroy();
+  }
+  return out.save();
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Organize: merge, split, rotate                                       */
