@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Loader2, X } from "lucide-react";
 
 import { FileGrid } from "../components/FileGrid";
 import { FileUploader } from "../components/FileUploader";
-import { PDFPreview } from "../components/PDFPreview";
+import { PDFPreview, type PageStroke, type PreviewOptions } from "../components/PDFPreview";
 import { ResultScreen } from "../components/ResultScreen";
 import { Button } from "../components/ui/button";
 import { Progress } from "../components/ui/progress";
@@ -20,7 +20,7 @@ import {
   type OutputFile,
   type ToolOutput,
 } from "../lib/files";
-import type { AreaSelection, PageRects, ProgressCallback, WatermarkSettings } from "../lib/pdf-operations";
+import type { AreaSelection, ProgressCallback, WatermarkSettings } from "../lib/pdf-operations";
 import { CATEGORIES, type ToolDef } from "../lib/tools";
 import { cn } from "../lib/utils";
 
@@ -39,7 +39,10 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
   const [result, setResult] = useState<ToolOutput | null>(null);
   const [watermark, setWatermark] = useState<WatermarkSettings>(NO_WATERMARK);
   const [selection, setSelection] = useState<AreaSelection | null>(null);
-  const [highlights, setHighlights] = useState<PageRects | null>(null);
+  const [strokes, setStrokes] = useState<PageStroke[]>([]);
+  // What the tool panel wants the canvas to show (tool, live effect, highlights, ...).
+  const [preview, setPreviewState] = useState<PreviewOptions>({});
+  const setPreview = useCallback((p: PreviewOptions) => setPreviewState((prev) => ({ ...prev, ...p })), []);
 
   useEffect(() => clearHandoff(), []);
 
@@ -95,6 +98,8 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
     setFiles([]);
     setWatermark(NO_WATERMARK);
     setSelection(null);
+    setStrokes([]);
+    setPreviewState({});
   };
 
   const Icon = tool.icon;
@@ -159,10 +164,11 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
                 watermarkText={tool.watermarkPreview ? watermark.text : ""}
                 watermarkOpacity={watermark.opacity}
                 watermarkPosition={watermark.position}
-                selectable={tool.areaSelect}
+                {...preview}
                 selection={selection}
                 onSelectionChange={setSelection}
-                highlights={highlights}
+                strokes={strokes}
+                onStroke={(s) => setStrokes((all) => [...all, s])}
               />
             </div>
           )}
@@ -207,7 +213,9 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
               onPreviewWatermark={setWatermark}
               selection={selection}
               setSelection={setSelection}
-              setHighlights={setHighlights}
+              strokes={strokes}
+              setStrokes={setStrokes}
+              setPreview={setPreview}
             />
           </fieldset>
         </aside>

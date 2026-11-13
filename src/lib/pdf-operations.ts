@@ -1,5 +1,13 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import { loadPdfjsDocument, type PdfjsDocument } from "./pdfjs";
+import {
+  cleanPage,
+  colorsFromRegions,
+  type CleanOptions,
+  type Rect,
+  type Region,
+  type WatermarkColors,
+} from "./watermark";
 
 export type WatermarkPosition = "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -183,13 +191,7 @@ export function invertPdf(bytes: Uint8Array, onProgress?: ProgressCallback) {
 /* Watermark removal: erase selected areas / find similar areas        */
 /* ------------------------------------------------------------------ */
 
-/** A rectangle as fractions (0..1) of the displayed page, top-left origin. */
-export interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+export type { Rect } from "./watermark";
 
 /** Rectangles to act on, keyed by 0-based page index. */
 export type PageRects = Record<number, Rect[]>;
@@ -202,12 +204,11 @@ export interface AreaSelection {
 
 export const countRects = (areas: PageRects) => Object.values(areas).reduce((n, r) => n + r.length, 0);
 
-const WORK_SCALE = 2; // render pages at 2x for erasing and matching
+const WORK_SCALE = 2; // render pages at 2x for matching and colour sampling
+const EXPORT_SCALE = 3; // 216 dpi for the patches written into the PDF
 const SEARCH_DOWNSAMPLE = 4; // match on a 1/4-size copy for speed
 const MATCH_SCALES = [0.8, 0.9, 1, 1.12, 1.25]; // tolerate small size differences
 const MAX_MATCHES_PER_PAGE = 20;
-// Pixels darker than this are treated as real content (body text) and kept.
-const KEEP_DARKER_THAN = 100;
 // Found matches can be a few pixels off; grow them by this share of their size on each side.
 const MATCH_PADDING = 0.06;
 
@@ -232,97 +233,6 @@ function toPixels(rect: Rect, canvas: HTMLCanvasElement) {
   const x2 = Math.min(canvas.width, Math.ceil((rect.x + rect.w) * canvas.width));
   const y2 = Math.min(canvas.height, Math.ceil((rect.y + rect.h) * canvas.height));
   return { x, y, w: Math.max(1, x2 - x), h: Math.max(1, y2 - y) };
-}
-
-const luminance = (d: Uint8ClampedArray, i: number) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-
-type PixelBox = { x: number; y: number; w: number; h: number };
-
-// Margin (in WORK_SCALE pixels, so 2px = 1pt) kept see-through around text in a patch.
-const PATCH_TEXT_MARGIN = 2;
-
-/** Max filter: each value becomes the largest within `radius` pixels (square window). */
-function dilate(src: Float32Array, w: number, h: number, radius: number) {
-  const tmp = new Float32Array(src.length);
-  const out = new Float32Array(src.length);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let m = 0;
-      for (let k = Math.max(0, x - radius); k <= Math.min(w - 1, x + radius); k++) m = Math.max(m, src[y * w + k]);
-      tmp[y * w + x] = m;
-    }
-  }
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let m = 0;
-      for (let k = Math.max(0, y - radius); k <= Math.min(h - 1, y + radius); k++) m = Math.max(m, tmp[k * w + x]);
-      out[y * w + x] = m;
-    }
-  }
-  return out;
-}
-
-/**
- * Works out how to paint over a region with its own background colour (the median of its
- * border pixels), so it also works on tinted pages. With keepDark, text darker than the
- * background is kept.
- *
- * - "patch": returns a separate canvas: background colour where the watermark was, and
- *   transparent where text is kept, so the original vector text shows through crisply.
- * - "flatten": paints the result straight onto ctx (for pages that become one image).
- */
-function cleanRegion(ctx: CanvasRenderingContext2D, px: PixelBox, keepDark: boolean, mode: "patch"): HTMLCanvasElement;
-function cleanRegion(ctx: CanvasRenderingContext2D, px: PixelBox, keepDark: boolean, mode: "flatten"): void;
-function cleanRegion(ctx: CanvasRenderingContext2D, px: PixelBox, keepDark: boolean, mode: "patch" | "flatten") {
-  const img = ctx.getImageData(px.x, px.y, px.w, px.h);
-  const d = img.data;
-
-  const border: number[] = [];
-  for (let x = 0; x < px.w; x++) border.push(x * 4, ((px.h - 1) * px.w + x) * 4);
-  for (let y = 1; y < px.h - 1; y++) border.push(y * px.w * 4, (y * px.w + px.w - 1) * 4);
-  border.sort((a, b) => luminance(d, a) - luminance(d, b));
-  const m = border[Math.floor(border.length / 2)];
-  const [r, g, b] = [d[m], d[m + 1], d[m + 2]];
-  const bgLum = luminance(d, m);
-  // Below darkCut: kept as-is (text). Above softCut: replaced (watermark).
-  // In between: faded toward the background, which keeps text edges smooth.
-  const darkCut = Math.min(KEEP_DARKER_THAN, bgLum - 70);
-  const softCut = Math.min(darkCut + 50, bgLum - 60);
-
-  // How much of each pixel to keep: 1 = text, 0 = watermark/background.
-  let keepMap = new Float32Array(px.w * px.h);
-  if (keepDark) {
-    for (let p = 0; p < keepMap.length; p++) {
-      keepMap[p] = Math.min(1, Math.max(0, (softCut - luminance(d, p * 4)) / (softCut - darkCut)));
-    }
-    // For patches, widen the see-through area so the original text's soft edges are never
-    // covered, whatever zoom the PDF is later viewed at.
-    if (mode === "patch") keepMap = dilate(keepMap, px.w, px.h, PATCH_TEXT_MARGIN);
-  }
-
-  for (let i = 0; i < d.length; i += 4) {
-    const keep = keepMap[i / 4];
-    if (mode === "patch") {
-      d[i] = r;
-      d[i + 1] = g;
-      d[i + 2] = b;
-      d[i + 3] = Math.round(255 * (1 - keep));
-    } else {
-      d[i] = r + (d[i] - r) * keep;
-      d[i + 1] = g + (d[i + 1] - g) * keep;
-      d[i + 2] = b + (d[i + 2] - b) * keep;
-    }
-  }
-
-  if (mode === "flatten") {
-    ctx.putImageData(img, px.x, px.y);
-    return;
-  }
-  const patch = document.createElement("canvas");
-  patch.width = px.w;
-  patch.height = px.h;
-  patch.getContext("2d")!.putImageData(img, 0, 0);
-  return patch;
 }
 
 function canvasToBytes(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg", quality?: number) {
@@ -495,55 +405,77 @@ export async function findSimilarAreas(
   }
 }
 
+/** Learns the watermark's colours from the regions the user marked on one page. */
+export async function estimateWatermarkColors(bytes: Uint8Array, page: number, regions: Region[]) {
+  const doc = await loadPdfjsDocument(bytes);
+  try {
+    const { canvas, ctx } = await renderPage(doc, page, WORK_SCALE);
+    return colorsFromRegions(ctx.getImageData(0, 0, canvas.width, canvas.height), regions, WORK_SCALE);
+  } finally {
+    await doc.destroy();
+  }
+}
+
 /**
- * Erases the given areas. Only the areas are replaced (by a cleaned image patch), so
- * everything else on the page stays as real, selectable text. Rotated pages are the
+ * Removes the watermark from the given regions of each page.
+ *
+ * Only the pixels that change are replaced (by a transparent PNG patch drawn over the
+ * page), so text elsewhere stays crisp, selectable vector text. Rotated pages are the
  * exception: they are flattened to an image.
  *
  * Note: the patch covers the watermark. If the watermark is text, it may still be
  * present (hidden) in the file's text layer.
  */
-export async function eraseAreas(
+export async function removeWatermark(
   bytes: Uint8Array,
-  areas: PageRects,
-  { keepDark = true }: { keepDark?: boolean } = {},
+  regions: Record<number, Region[]>,
+  colors: WatermarkColors | null,
+  opts: CleanOptions,
   onProgress?: ProgressCallback
 ) {
   const out = await loadPdf(bytes);
   const js = await loadPdfjsDocument(bytes);
-  const pages = Object.keys(areas)
+  const pages = Object.keys(regions)
     .map(Number)
-    .filter((i) => areas[i]?.length)
+    .filter((i) => regions[i]?.length)
     .sort((a, b) => a - b);
+  let changed = 0;
 
   try {
     for (const [n, index] of pages.entries()) {
-      const { canvas, ctx, viewport, rotation } = await renderPage(js, index, WORK_SCALE);
-      const boxes = areas[index].map((r) => toPixels(r, canvas));
+      const { canvas, ctx, viewport, rotation } = await renderPage(js, index, EXPORT_SCALE);
+      const patch = cleanPage(ctx.getImageData(0, 0, canvas.width, canvas.height), regions[index], colors, opts, EXPORT_SCALE);
 
-      if (rotation === 0) {
-        const page = out.getPage(index);
-        for (const px of boxes) {
-          // Transparent where text is kept, so the original vector text stays crisp underneath.
-          const patch = await out.embedPng(await canvasToBytes(cleanRegion(ctx, px, keepDark, "patch"), "image/png"));
+      if (patch) {
+        changed++;
+        if (rotation === 0) {
+          const pc = document.createElement("canvas");
+          pc.width = patch.image.width;
+          pc.height = patch.image.height;
+          pc.getContext("2d")!.putImageData(patch.image, 0, 0);
+          const image = await out.embedPng(await canvasToBytes(pc, "image/png"));
           // Map the patch corners from canvas pixels to PDF user space (handles crop-box offsets).
-          const [x1, y1] = viewport.convertToPdfPoint(px.x, px.y);
-          const [x2, y2] = viewport.convertToPdfPoint(px.x + px.w, px.y + px.h);
-          page.drawImage(patch, {
+          const [x1, y1] = viewport.convertToPdfPoint(patch.x, patch.y);
+          const [x2, y2] = viewport.convertToPdfPoint(patch.x + pc.width, patch.y + pc.height);
+          out.getPage(index).drawImage(image, {
             x: Math.min(x1, x2),
             y: Math.min(y1, y2),
             width: Math.abs(x2 - x1),
             height: Math.abs(y2 - y1),
           });
+        } else {
+          // Rotated page: replace it with the cleaned image of the whole page.
+          const pc = document.createElement("canvas");
+          pc.width = patch.image.width;
+          pc.height = patch.image.height;
+          pc.getContext("2d")!.putImageData(patch.image, 0, 0);
+          ctx.drawImage(pc, patch.x, patch.y);
+          const image = await out.embedJpg(await canvasToBytes(canvas, "image/jpeg", 0.92));
+          const w = viewport.width / EXPORT_SCALE;
+          const h = viewport.height / EXPORT_SCALE;
+          out.removePage(index);
+          out.insertPage(index, [w, h]).drawImage(image, { x: 0, y: 0, width: w, height: h });
         }
-      } else {
-        // Rotated page: replace it with the cleaned image of the whole page.
-        boxes.forEach((px) => cleanRegion(ctx, px, keepDark, "flatten"));
-        const image = await out.embedJpg(await canvasToBytes(canvas, "image/jpeg", 0.92));
-        const w = viewport.width / WORK_SCALE;
-        const h = viewport.height / WORK_SCALE;
-        out.removePage(index);
-        out.insertPage(index, [w, h]).drawImage(image, { x: 0, y: 0, width: w, height: h });
       }
       onProgress?.(n + 1, pages.length);
       await yieldToUi();
@@ -551,9 +483,9 @@ export async function eraseAreas(
   } finally {
     await js.destroy();
   }
+  if (!changed) throw new Error("Nothing to remove: no watermark pixels were found in the marked areas.");
   return out.save();
 }
-
 
 /* ------------------------------------------------------------------ */
 /* Organize: merge, split, rotate                                       */

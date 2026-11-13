@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RotateCcw, RotateCw } from "lucide-react";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
@@ -12,6 +12,7 @@ import { ResizeTool } from "./ResizeTool";
 import { WatermarkTool } from "./WatermarkTool";
 import { baseName, formatSize, type LoadedPdf, type OutputFile } from "../../lib/files";
 import { cn } from "../../lib/utils";
+import type { PageStroke, PreviewOptions } from "../PDFPreview";
 import {
   addTextWatermark,
   compressPdf,
@@ -28,7 +29,6 @@ import {
   type ProgressCallback,
   type WatermarkSettings,
   type AreaSelection,
-  type PageRects,
 } from "../../lib/pdf-operations";
 
 export interface ToolPanelProps {
@@ -39,9 +39,12 @@ export interface ToolPanelProps {
   onPreviewWatermark?: (settings: WatermarkSettings) => void;
   /** The area dragged on the preview (tools with areaSelect only). */
   selection?: AreaSelection | null;
-  /** Outline boxes on the preview, e.g. the areas that will be erased. */
-  setHighlights?: (areas: PageRects | null) => void;
   setSelection?: (selection: AreaSelection | null) => void;
+  /** Brush strokes painted on the preview. */
+  strokes?: PageStroke[];
+  setStrokes?: (strokes: PageStroke[] | ((all: PageStroke[]) => PageStroke[])) => void;
+  /** Ask the canvas for a tool, a live effect, highlights, a CSS filter, etc. Merged into the current options. */
+  setPreview?: (options: PreviewOptions) => void;
 }
 
 const named = (file: LoadedPdf, suffix: string) => `${baseName(file.name)}_${suffix}.pdf`;
@@ -195,9 +198,12 @@ export const SplitPanel = ({ files, process }: ToolPanelProps) => {
   );
 };
 
-export const RotatePanel = ({ files, process }: ToolPanelProps) => {
+export const RotatePanel = ({ files, process, setPreview }: ToolPanelProps) => {
   const file = files[0];
   const [angle, setAngle] = useState(90);
+  // Live preview: the canvas shows the pages already rotated.
+  useEffect(() => setPreview?.({ rotation: angle }), [angle, setPreview]);
+  useEffect(() => () => setPreview?.({ rotation: 0 }), [setPreview]);
   const options = [
     { value: 270, label: "Left 90°", icon: RotateCcw },
     { value: 90, label: "Right 90°", icon: RotateCw },
@@ -269,10 +275,12 @@ export const WatermarkPanel = ({ files, process, onPreviewWatermark }: ToolPanel
   );
 };
 
-export const CropPanel = ({ files, process }: ToolPanelProps) => {
+export const CropPanel = ({ files, process, setPreview }: ToolPanelProps) => {
   const file = files[0];
+  useEffect(() => () => setPreview?.({ cropMargins: null }), [setPreview]);
   return (
     <CropTool
+      onChange={(m) => setPreview?.({ cropMargins: m })}
       onCrop={(m) => process(async () => [{ name: named(file, "cropped"), bytes: await cropPages(file.bytes, m) }])}
     />
   );
@@ -289,8 +297,13 @@ export const ResizePanel = ({ files, process }: ToolPanelProps) => {
   );
 };
 
-export const InvertPanel = ({ files, process }: ToolPanelProps) => {
+export const InvertPanel = ({ files, process, setPreview }: ToolPanelProps) => {
   const file = files[0];
+  // Live preview with a CSS filter; the real inversion happens on export.
+  useEffect(() => {
+    setPreview?.({ cssFilter: "invert(1)" });
+    return () => setPreview?.({ cssFilter: undefined });
+  }, [setPreview]);
   return (
     <InvertTool
       onInvert={() =>

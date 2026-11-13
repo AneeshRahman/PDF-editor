@@ -1,14 +1,23 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from '../../components/ui/button';
 import { Label } from '../../components/ui/label';
 import { Input } from '../../components/ui/input';
 
 interface CropToolProps {
   onCrop: (margins: { top: number; right: number; bottom: number; left: number }) => void;
+  /** Called on every edit, for a live preview. */
+  onChange?: (margins: { top: number; right: number; bottom: number; left: number }) => void;
 }
 
-export const CropTool = ({ onCrop }: CropToolProps) => {
-  const [margins, setMargins] = useState({ top: 20, right: 20, bottom: 20, left: 20 });
+export const CropTool = ({ onCrop, onChange }: CropToolProps) => {
+  const [margins, setMarginsState] = useState({ top: 20, right: 20, bottom: 20, left: 20 });
+  const setMargins = (m: typeof margins) => {
+    setMarginsState(m);
+    onChange?.(m);
+  };
+  // Show the starting margins straight away.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => onChange?.(margins), []);
 
   const handleCrop = () => {
     onCrop(margins);
