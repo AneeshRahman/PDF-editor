@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import { loadPdfjsDocument } from "./pdfjs";
 
 export type WatermarkPosition = "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -343,4 +343,100 @@ export async function removeWatermarkByImage(
   });
 
   return { bytes: result, matches: totalMatches };
+}
+
+/* ------------------------------------------------------------------ */
+/* Organize: merge, split, rotate                                       */
+/* ------------------------------------------------------------------ */
+
+/** Loads with pdf-lib, tolerating owner-password (permissions-only) encryption. */
+export function loadPdf(bytes: Uint8Array) {
+  return PDFDocument.load(bytes, { ignoreEncryption: true });
+}
+
+export async function getPageCount(bytes: Uint8Array) {
+  return (await loadPdf(bytes)).getPageCount();
+}
+
+export async function mergePdfs(files: Uint8Array[]) {
+  const out = await PDFDocument.create();
+  for (const bytes of files) {
+    const src = await loadPdf(bytes);
+    const pages = await out.copyPages(src, src.getPageIndices());
+    pages.forEach((p) => out.addPage(p));
+  }
+  return out.save();
+}
+
+/** A 1-based, inclusive page range. */
+export interface PageRange {
+  from: number;
+  to: number;
+}
+
+/**
+ * Parses "1-3, 5, 8-" into ranges. An open end ("8-") runs to the last page.
+ * Throws a readable error for anything invalid or out of bounds.
+ */
+export function parsePageRanges(input: string, pageCount: number): PageRange[] {
+  const parts = input.split(",").map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) throw new Error("Enter at least one page or range, e.g. 1-3, 5");
+
+  return parts.map((part) => {
+    const m = part.match(/^(\d+)?\s*(-)?\s*(\d+)?$/);
+    if (!m || (!m[1] && !m[3])) throw new Error(`"${part}" is not a page or range`);
+    const from = m[1] ? Number(m[1]) : 1;
+    const to = m[2] ? (m[3] ? Number(m[3]) : pageCount) : from;
+    if (from < 1 || to > pageCount || from > to) {
+      throw new Error(`"${part}" is outside pages 1-${pageCount}`);
+    }
+    return { from, to };
+  });
+}
+
+/** Every N pages: [1-N], [N+1-2N], ... */
+export function fixedRanges(pageCount: number, every: number): PageRange[] {
+  const n = Math.max(1, Math.floor(every));
+  const ranges: PageRange[] = [];
+  for (let from = 1; from <= pageCount; from += n) {
+    ranges.push({ from, to: Math.min(pageCount, from + n - 1) });
+  }
+  return ranges;
+}
+
+async function extractPages(src: PDFDocument, indices: number[]) {
+  const out = await PDFDocument.create();
+  const pages = await out.copyPages(src, indices);
+  pages.forEach((p) => out.addPage(p));
+  return out.save();
+}
+
+const rangeIndices = (r: PageRange) =>
+  Array.from({ length: r.to - r.from + 1 }, (_, i) => r.from - 1 + i);
+
+/** One output PDF per range, or a single PDF containing all ranges when merge is true. */
+export async function splitPdf(bytes: Uint8Array, ranges: PageRange[], merge = false) {
+  const src = await loadPdf(bytes);
+  if (merge) {
+    return [{ range: ranges, bytes: await extractPages(src, ranges.flatMap(rangeIndices)) }];
+  }
+  const outputs: { range: PageRange[]; bytes: Uint8Array }[] = [];
+  for (const r of ranges) {
+    outputs.push({ range: [r], bytes: await extractPages(src, rangeIndices(r)) });
+  }
+  return outputs;
+}
+
+export const describeRange = (r: PageRange) => (r.from === r.to ? `${r.from}` : `${r.from}-${r.to}`);
+
+/** Adds `angle` (a multiple of 90) to each page's current rotation. */
+export async function rotatePdf(bytes: Uint8Array, angle: number, pageIndices?: number[]) {
+  const doc = await loadPdf(bytes);
+  const targets = new Set(pageIndices ?? doc.getPageIndices());
+  doc.getPages().forEach((page, i) => {
+    if (!targets.has(i)) return;
+    const current = page.getRotation().angle;
+    page.setRotation(degrees((((current + angle) % 360) + 360) % 360));
+  });
+  return doc.save();
 }

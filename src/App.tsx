@@ -1,27 +1,34 @@
+import { BrowserRouter, Route, Routes, useParams } from "react-router-dom";
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import { AppLayout } from "./components/AppLayout";
+import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
+import { ToolPage } from "./pages/ToolPage";
+import { getTool } from "./lib/tools";
 
-const queryClient = new QueryClient();
+/** Looks up the tool from the URL. The key resets all state when switching tools. */
+const ToolRoute = () => {
+  const { toolId } = useParams();
+  const tool = getTool(toolId);
+  return tool ? <ToolPage key={tool.id} tool={tool} /> : <NotFound />;
+};
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+  <TooltipProvider>
+    <Toaster />
+    <Sonner richColors position="bottom-right" />
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route index element={<Home />} />
+          <Route path=":toolId" element={<ToolRoute />} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  </TooltipProvider>
 );
 
 export default App;
