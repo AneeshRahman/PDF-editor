@@ -1,119 +1,123 @@
-import { useEffect, useRef } from "react";
-import * as pdfjsLib from "pdfjs-dist";
-// Import the worker via Vite to avoid CDN issues
-  import PdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?worker";
-
-  // Configure worker by providing a Worker instance (most reliable in Vite)
-  pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
+import { useEffect, useRef, useState } from "react";
+import { loadPdfjsDocument, type PdfjsDocument } from "../lib/pdfjs";
+import {
+  WATERMARK_FONT_SIZE,
+  watermarkAnchor,
+  type WatermarkPosition,
+} from "../lib/pdf-operations";
 
 interface PDFPreviewProps {
   pdfData: Uint8Array | null;
   watermarkText?: string;
   watermarkOpacity?: number;
-  watermarkPosition?: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  watermarkPosition?: WatermarkPosition;
 }
+
+interface RenderedPage {
+  overlay: HTMLCanvasElement;
+  width: number; // CSS px == PDF points at scale 1
+  height: number;
+}
+
+const PAGE_GAP = 16;
 
 export const PDFPreview = ({
   pdfData,
   watermarkText = "",
   watermarkOpacity = 0.3,
-  watermarkPosition = "center"
+  watermarkPosition = "center",
 }: PDFPreviewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [pages, setPages] = useState<RenderedPage[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
+  // Render the PDF pages. Only re-runs when the document itself changes.
   useEffect(() => {
-    if (!pdfData || !containerRef.current) return;
+    const container = containerRef.current;
+    if (!pdfData || !container) return;
 
-    const renderPDF = async () => {
+    let cancelled = false;
+    let doc: PdfjsDocument | null = null;
+    const dpr = window.devicePixelRatio || 1;
+
+    const render = async () => {
       try {
-        const loadingTask = pdfjsLib.getDocument({
-          data: new Uint8Array(pdfData),
-          verbosity: 0, // Suppress warnings, show only errors
-        });
-        const pdf = await loadingTask.promise;
-        const numPages = pdf.numPages;
+        setError(null);
+        doc = await loadPdfjsDocument(pdfData);
+        if (cancelled) return;
 
-        const container = containerRef.current!;
-        container.innerHTML = ''; // Clear previous content
-        container.style.position = 'relative'; // Ensure relative positioning
+        container.innerHTML = "";
+        const rendered: RenderedPage[] = [];
 
-        let totalHeight = 0;
+        for (let n = 1; n <= doc.numPages; n++) {
+          const page = await doc.getPage(n);
+          if (cancelled) return;
+          const viewport = page.getViewport({ scale: 1 });
+          const hiDpi = page.getViewport({ scale: dpr });
 
-        for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 1.0 });
+          const wrapper = document.createElement("div");
+          wrapper.className = "relative mx-auto bg-white shadow-md";
+          wrapper.style.width = `${viewport.width}px`;
+          wrapper.style.height = `${viewport.height}px`;
+          wrapper.style.marginBottom = `${PAGE_GAP}px`;
 
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext("2d")!;
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.floor(hiDpi.width);
+          canvas.height = Math.floor(hiDpi.height);
+          canvas.className = "absolute inset-0 w-full h-full";
 
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          canvas.style.position = 'absolute';
-          canvas.style.top = totalHeight + 'px';
-          canvas.style.left = '50%';
-          canvas.style.transform = 'translateX(-50%)';
-          canvas.style.display = 'block';
+          const overlay = document.createElement("canvas");
+          overlay.width = canvas.width;
+          overlay.height = canvas.height;
+          overlay.className = "absolute inset-0 w-full h-full pointer-events-none";
 
-          container.appendChild(canvas);
+          wrapper.append(canvas, overlay);
+          container.appendChild(wrapper);
 
-          const renderContext = {
-            canvasContext: context,
-            viewport: viewport,
-            canvas: canvas,
-          };
-
-          await page.render(renderContext).promise;
-
-        // Add watermark if text is provided and not empty
-        if (watermarkText && watermarkText.trim()) {
-          context.save();
-          context.globalAlpha = watermarkOpacity;
-          context.font = "32px Arial";
-          context.fillStyle = "#666666";
-          context.textAlign = "center";
-          context.textBaseline = "middle";
-
-          let x = viewport.width / 2;
-          let y = viewport.height / 2;
-
-          switch (watermarkPosition) {
-            case "top-left":
-              x = 70;
-              y = 40;
-              break;
-            case "top-right":
-              x = viewport.width - 70;
-              y = 40;
-              break;
-            case "bottom-left":
-              x = 70;
-              y = viewport.height - 40;
-              break;
-            case "bottom-right":
-              x = viewport.width - 70;
-              y = viewport.height - 40;
-              break;
-          }
-
-          context.fillText(watermarkText, x, y);
-          context.restore();
+          await page.render({ canvasContext: canvas.getContext("2d")!, viewport: hiDpi, canvas }).promise;
+          if (cancelled) return;
+          rendered.push({ overlay, width: viewport.width, height: viewport.height });
         }
-
-          totalHeight += viewport.height;
+        setPages(rendered);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Error rendering PDF:", err);
+          setError("Could not render this PDF.");
         }
-
-        container.style.height = totalHeight + 'px';
-      } catch (error) {
-        console.error("Error rendering PDF:", error);
       }
     };
 
-    renderPDF();
-  }, [pdfData, watermarkText, watermarkOpacity, watermarkPosition]);
+    render();
+    return () => {
+      cancelled = true;
+      doc?.destroy();
+    };
+  }, [pdfData]);
+
+  // Draw the watermark preview on the overlay canvases (cheap, no re-render of pages).
+  useEffect(() => {
+    for (const { overlay, width, height } of pages) {
+      const ctx = overlay.getContext("2d")!;
+      const scale = overlay.width / width;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      if (!watermarkText.trim()) continue;
+
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.globalAlpha = watermarkOpacity;
+      ctx.font = `${WATERMARK_FONT_SIZE}px Helvetica, Arial, sans-serif`;
+      ctx.fillStyle = "#666666";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const { x, y } = watermarkAnchor(watermarkPosition, width, height);
+      ctx.fillText(watermarkText, x, y);
+    }
+  }, [pages, watermarkText, watermarkOpacity, watermarkPosition]);
 
   return (
-    <div className="w-full h-full overflow-y-auto bg-muted rounded-lg">
-      <div ref={containerRef} className="w-full" />
+    <div className="w-full h-full overflow-auto bg-muted rounded-lg p-4">
+      {error && <p className="text-sm text-destructive text-center py-8">{error}</p>}
+      <div ref={containerRef} className="w-max min-w-full" />
     </div>
   );
 };

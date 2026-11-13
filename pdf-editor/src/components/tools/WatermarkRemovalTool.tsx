@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/card";
 import { Label } from "../../components/ui/label";
 import { Input } from "../../components/ui/input";
 import { Slider } from "../../components/ui/slider";
 import { Button } from "../../components/ui/button";
-import { Upload, Trash2 } from "lucide-react";
+import { Eraser, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface WatermarkRemovalToolProps {
@@ -15,6 +15,13 @@ export const WatermarkRemovalTool = ({ onRemove }: WatermarkRemovalToolProps) =>
   const [watermarkImage, setWatermarkImage] = useState<File | null>(null);
   const [threshold, setThreshold] = useState(0.5);
   const [preview, setPreview] = useState<string>("");
+
+  // Free the object URL when it is replaced or the tool unmounts.
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -105,14 +112,15 @@ export const WatermarkRemovalTool = ({ onRemove }: WatermarkRemovalToolProps) =>
         disabled={!watermarkImage}
         className="w-full"
       >
-        <Upload className="w-4 h-4 mr-2" />
-        Remove Watermarks & Download
+        <Eraser className="w-4 h-4 mr-2" />
+        Remove Watermarks
       </Button>
 
       <div className="text-xs text-muted-foreground space-y-1">
-        <p>• This process may take a minute for large PDFs</p>
-        <p>• Works with watermarks at different scales and rotations</p>
-        <p>• Best results with clear, high-contrast watermarks</p>
+        <p>• Experimental: finds the watermark by image matching and paints it out</p>
+        <p>• Handles different sizes, but not rotated watermarks</p>
+        <p>• Works best on light watermarks over a white background</p>
+        <p>• Pages become images (text no longer selectable); large PDFs take a while</p>
       </div>
     </Card>
   );

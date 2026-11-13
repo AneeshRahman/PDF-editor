@@ -2,36 +2,44 @@ import { useCallback } from "react";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
 
+const MAX_SIZE_MB = 20;
+
+const isPdf = (file: File) =>
+  file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
 interface FileUploaderProps {
   onFileSelect: (file: File) => void;
 }
 
 export const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const file = e.dataTransfer.files[0];
-      if (file && file.type === "application/pdf") {
-        onFileSelect(file);
-      } else {
+  const accept = useCallback(
+    (file: File | undefined) => {
+      if (!file) return;
+      if (!isPdf(file)) {
         toast.error("Please upload a PDF file");
+      } else if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+        toast.error(`File is too large (max ${MAX_SIZE_MB}MB)`);
+      } else {
+        onFileSelect(file);
       }
     },
     [onFileSelect]
   );
 
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      accept(e.dataTransfer.files[0]);
+    },
+    [accept]
+  );
+
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        if (file.type === "application/pdf") {
-          onFileSelect(file);
-        } else {
-          toast.error("Please upload a PDF file");
-        }
-      }
+      accept(e.target.files?.[0]);
+      e.target.value = ""; // allow picking the same file again
     },
-    [onFileSelect]
+    [accept]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -46,15 +54,13 @@ export const FileUploader = ({ onFileSelect }: FileUploaderProps) => {
     >
       <input
         type="file"
-        accept=".pdf"
+        accept=".pdf,application/pdf"
         onChange={handleFileInput}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
       />
       <Upload className="w-12 h-12 mb-4 text-muted-foreground" />
-      <p className="mb-2 text-sm text-foreground font-medium">
-        Click to upload or drag and drop
-      </p>
-      <p className="text-xs text-muted-foreground">PDF files only (Max 20MB)</p>
+      <p className="mb-2 text-sm text-foreground font-medium">Click to upload or drag and drop</p>
+      <p className="text-xs text-muted-foreground">PDF files only (Max {MAX_SIZE_MB}MB)</p>
     </div>
   );
 };
