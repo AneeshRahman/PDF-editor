@@ -8,6 +8,7 @@ import {
   type Region,
   type WatermarkColors,
 } from "./watermark";
+import { removeVectorWatermark } from "./vector-watermark";
 
 export type WatermarkPosition = "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -417,14 +418,12 @@ export async function estimateWatermarkColors(bytes: Uint8Array, page: number, r
 }
 
 /**
- * Removes the watermark from the given regions of each page.
+ * Removes the watermark from the given regions of each page, in two passes:
  *
- * Only the pixels that change are replaced (by a transparent PNG patch drawn over the
- * page), so text elsewhere stays crisp, selectable vector text. Rotated pages are the
- * exception: they are flattened to an image.
- *
- * Note: the patch covers the watermark. If the watermark is text, it may still be
- * present (hidden) in the file's text layer.
+ * 1. Vector: if the watermark is drawn as text or shapes (most are), the drawing itself is
+ *    switched off in the PDF's content, so nothing is painted over and text is untouched.
+ * 2. Pixels: whatever is left (e.g. a watermark inside a scanned image) is cleaned with a
+ *    transparent patch over just the changed pixels. Rotated pages are flattened instead.
  */
 export async function removeWatermark(
   bytes: Uint8Array,
@@ -433,12 +432,21 @@ export async function removeWatermark(
   opts: CleanOptions,
   onProgress?: ProgressCallback
 ) {
-  const out = await loadPdf(bytes);
-  const js = await loadPdfjsDocument(bytes);
   const pages = Object.keys(regions)
     .map(Number)
     .filter((i) => regions[i]?.length)
     .sort((a, b) => a - b);
+
+  let source = bytes;
+  let vectorRemoved = 0;
+  if (colors && opts.keepText) {
+    const v = await removeVectorWatermark(bytes, pages, colors, opts.tolerance);
+    source = v.bytes;
+    vectorRemoved = v.total;
+  }
+
+  const out = await loadPdf(source);
+  const js = await loadPdfjsDocument(source);
   let changed = 0;
 
   try {
@@ -483,7 +491,7 @@ export async function removeWatermark(
   } finally {
     await js.destroy();
   }
-  if (!changed) throw new Error("Nothing to remove: no watermark pixels were found in the marked areas.");
+  if (!changed && !vectorRemoved) throw new Error("Nothing to remove: no watermark was found in the marked areas.");
   return out.save();
 }
 

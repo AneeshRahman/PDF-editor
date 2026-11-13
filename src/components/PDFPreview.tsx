@@ -43,6 +43,8 @@ export interface PreviewOptions {
   cropMargins?: Margins | null;
   /** Live rotation preview, in degrees (multiple of 90). */
   rotation?: number;
+  /** Show this document instead (e.g. a live, already-processed version). Zoom is kept. */
+  pdfOverride?: Uint8Array | null;
 }
 
 interface PDFPreviewProps extends PreviewOptions {
@@ -97,8 +99,10 @@ export const PDFPreview = ({
   cssFilter,
   cropMargins = null,
   rotation = 0,
+  pdfOverride = null,
   className,
 }: PDFPreviewProps) => {
+  const zoomSet = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PdfjsDocument | null>(null);
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
@@ -110,6 +114,8 @@ export const PDFPreview = ({
   const [renderTick, setRenderTick] = useState(0);
 
   const [showResult, setShowResult] = useState(true);
+  // "Hold for original" also swaps a processed document back to the original.
+  const shownPdf = showResult && pdfOverride ? pdfOverride : pdfData;
   const [handTool, setHandTool] = useState(false);
   const [spaceDown, setSpaceDown] = useState(false);
   const [panning, setPanning] = useState(false);
@@ -118,13 +124,13 @@ export const PDFPreview = ({
   /* ----------------------------- Loading ---------------------------- */
 
   useEffect(() => {
-    if (!pdfData) return;
+    if (!shownPdf) return;
     let cancelled = false;
     let loaded: PdfjsDocument | null = null;
     (async () => {
       try {
         setError(null);
-        const d = await loadPdfjsDocument(pdfData);
+        const d = await loadPdfjsDocument(shownPdf);
         loaded = d;
         if (cancelled) return;
         const s: { w: number; h: number }[] = [];
@@ -134,9 +140,10 @@ export const PDFPreview = ({
         }
         if (cancelled) return;
         renderState.current = s.map(() => ({ scale: 0, effectKey: null }));
-        // Start at "fit width", but never above 100%.
+        // Start at "fit width", but never above 100%. Swapping documents keeps the zoom.
         const el = scrollRef.current;
-        if (el) {
+        if (el && !zoomSet.current) {
+          zoomSet.current = true;
           const fit = (el.clientWidth - PAD * 2) / Math.max(...s.map((x) => x.w));
           const z = clampZoom(Math.min(1, fit));
           zoomRef.current = z;
@@ -156,7 +163,7 @@ export const PDFPreview = ({
       setDoc(null);
       loaded?.destroy();
     };
-  }, [pdfData]);
+  }, [shownPdf]);
 
   /* ---------------------------- Rendering --------------------------- */
 
@@ -372,7 +379,7 @@ export const PDFPreview = ({
 
   /* ------------------------------ Render ---------------------------- */
 
-  const hasLivePreview = !!(effect || cssFilter || cropMargins || rotation);
+  const hasLivePreview = !!(effect || cssFilter || cropMargins || rotation || pdfOverride);
   const live = showResult;
   const rot = live ? ((rotation % 360) + 360) % 360 : 0;
   const filter = live ? cssFilter : undefined;

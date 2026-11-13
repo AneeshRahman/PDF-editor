@@ -19,6 +19,7 @@ import {
   type PageRects,
 } from "../../lib/pdf-operations";
 import { cleanPage, type Region, type WatermarkColors } from "../../lib/watermark";
+import { removeVectorWatermark, type VectorRemovalResult } from "../../lib/vector-watermark";
 
 type Method = "brush" | "box";
 type Spread = "painted" | "page" | "all";
@@ -63,8 +64,11 @@ export const RemoveWatermarkPanel = ({
   const [finding, setFinding] = useState(false);
   const [findProgress, setFindProgress] = useState<number | null>(null);
   const [findError, setFindError] = useState<string | null>(null);
+  const [vector, setVector] = useState<VectorRemovalResult | null>(null);
+  const [vectorBusy, setVectorBusy] = useState(false);
   const runId = useRef(0);
   const learnId = useRef(0);
+  const vectorId = useRef(0);
 
   const allPages = useMemo(() => Array.from({ length: file.pageCount }, (_, i) => i), [file.pageCount]);
 
@@ -157,6 +161,35 @@ export const RemoveWatermarkPanel = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sampleKey stands in for sample
   }, [sampleKey, needsColors, file.bytes]);
 
+  /* ------------------- Vector pass (the PDF's own drawing) ------------ */
+
+  // Most watermarks are drawn as text or shapes. Remove that drawing from the PDF itself
+  // and preview the real result; the pixel pass below only handles what is left.
+  const regionPages = Object.keys(regions).map(Number).sort((a, b) => a - b);
+  const regionPagesKey = regionPages.join(",");
+  useEffect(() => {
+    const id = ++vectorId.current;
+    if (!colors || !keep || !regionPages.length) {
+      setVector(null);
+      setVectorBusy(false);
+      return;
+    }
+    setVectorBusy(true);
+    const timer = setTimeout(async () => {
+      try {
+        const r = await removeVectorWatermark(file.bytes, regionPages, colors, tolerance);
+        if (vectorId.current === id) setVector(r.total ? r : null);
+      } catch (e) {
+        console.error(e);
+        if (vectorId.current === id) setVector(null);
+      } finally {
+        if (vectorId.current === id) setVectorBusy(false);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- regionPagesKey stands in for regionPages
+  }, [colors, keep, regionPagesKey, tolerance, file.bytes]);
+
   /* ---------------------------- Live preview -------------------------- */
 
   const effect = useMemo((): PreviewEffect | null => {
@@ -178,9 +211,9 @@ export const RemoveWatermarkPanel = ({
   }, [method, selection, regions]);
 
   useEffect(() => {
-    setPreview?.({ tool: method, brushSize, effect, highlights });
-  }, [setPreview, method, brushSize, effect, highlights]);
-  useEffect(() => () => setPreview?.({ tool: "none", effect: null, highlights: null }), [setPreview]);
+    setPreview?.({ tool: method, brushSize, effect, highlights, pdfOverride: vector?.bytes ?? null });
+  }, [setPreview, method, brushSize, effect, highlights, vector]);
+  useEffect(() => () => setPreview?.({ tool: "none", effect: null, highlights: null, pdfOverride: null }), [setPreview]);
 
   // Ctrl/⌘+Z undoes the last brush stroke.
   useEffect(() => {
@@ -421,13 +454,31 @@ export const RemoveWatermarkPanel = ({
       )}
       {learnError && <p className="text-xs text-destructive">{learnError}</p>}
       {colors && !learning && (
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span
-            className="inline-block h-4 w-4 rounded border border-border"
-            style={{ background: `rgb(${colors.mark.map(Math.round).join(",")})` }}
-          />
-          Watermark colour detected. The page shows a live preview; hold “Hold for original” to compare.
-        </p>
+        <div className="space-y-1.5 rounded-md bg-muted/60 p-3 text-xs">
+          <p className="flex items-center gap-2">
+            <span
+              className="inline-block h-4 w-4 rounded border border-border"
+              style={{ background: `rgb(${colors.mark.map(Math.round).join(",")})` }}
+            />
+            Watermark colour detected.
+          </p>
+          {vectorBusy ? (
+            <p className="flex items-center text-muted-foreground">
+              <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Looking for it in the PDF's drawing…
+            </p>
+          ) : vector ? (
+            <p data-testid="vector-status">
+              <span className="font-medium text-emerald-700 dark:text-emerald-400">Removed from the PDF itself</span>
+              {" "}({vector.total} drawing{vector.total === 1 ? "" : "s"} on {Object.keys(vector.removed).length} page
+              {Object.keys(vector.removed).length === 1 ? "" : "s"}). Text is untouched and stays sharp.
+            </p>
+          ) : (
+            <p data-testid="vector-status" className="text-muted-foreground">
+              The watermark is part of an image (e.g. a scan), so its pixels are cleaned instead.
+            </p>
+          )}
+          <p className="text-muted-foreground">The page shows the live result; hold “Hold for original” to compare.</p>
+        </div>
       )}
 
       <Button className="w-full" size="lg" disabled={!ready || learning} onClick={apply}>
@@ -436,8 +487,8 @@ export const RemoveWatermarkPanel = ({
 
       <ul className="space-y-1 text-xs text-muted-foreground">
         <li>• Zoom with Ctrl + scroll or pinch; hold Space and drag to pan.</li>
-        <li>• Only changed pixels are replaced; the rest stays as real, selectable text.</li>
-        <li>• A text watermark may still exist, hidden, in the text layer.</li>
+        <li>• Vector watermarks are switched off in the PDF; image watermarks get a patch over just the changed pixels.</li>
+        <li>• Grey content in exactly the watermark's colour is treated as watermark: check the preview.</li>
       </ul>
     </div>
   );

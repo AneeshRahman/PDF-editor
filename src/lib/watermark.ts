@@ -295,7 +295,13 @@ export function cleanPage(
     // (those surviving an erosion) seed a flood fill through the candidates. This keeps thin
     // slivers of watermark squeezed between letters, but drops text edges elsewhere.
     const open = Math.min(Math.round(colors.strokeHalfPt * 0.5 * pxPerPt), Math.round(1 * pxPerPt));
-    if (open > 0) cand = reconstruct(morph(cand, w, h, open, "erode"), cand, w, h);
+    if (open > 0) {
+      const found = reconstruct(morph(cand, w, h, open, "erode"), cand, w, h);
+      // Pockets of watermark fully enclosed by a letter (e.g. inside an "e") can't be reached
+      // by the flood fill, so also take any candidate close to watermark already found.
+      const near = morph(found, w, h, Math.round(2 * pxPerPt), "dilate");
+      for (let p = 0; p < cand.length; p++) cand[p] = found[p] | (cand[p] & near[p]);
+    }
     // Grow a little to take in the watermark's own soft edge and text that crosses it.
     cand = morph(cand, w, h, Math.max(1, Math.round(0.6 * pxPerPt)), "dilate");
     for (let p = 0; p < mask.length; p++) mask[p] &= cand[p];
@@ -332,9 +338,8 @@ export function cleanPage(
       const i = p * 4;
       const j = (y * pw + x) * 4;
       if (opts.keepText && M) {
-        for (let c = 0; c < 3; c++) {
-          o[j + c] = Math.min(paper[c], (s[i + c] * paper[c]) / Math.max(1, M[c]));
-        }
+        // Divide the watermark layer back out: watermark-on-paper -> paper, text keeps its darkness.
+        for (let c = 0; c < 3; c++) o[j + c] = Math.min(paper[c], (s[i + c] * paper[c]) / Math.max(1, M[c]));
       } else {
         o[j] = paper[0];
         o[j + 1] = paper[1];
