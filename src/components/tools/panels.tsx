@@ -7,7 +7,6 @@ import { Label } from "../ui/label";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { CompressTool } from "./CompressTool";
 import { CropTool } from "./CropTool";
-import { InvertTool } from "./InvertTool";
 import { ResizeTool } from "./ResizeTool";
 import { baseName, formatSize, type LoadedPdf, type OutputFile } from "../../lib/files";
 import { cn } from "../../lib/utils";
@@ -17,7 +16,6 @@ import {
   cropPages,
   describeRange,
   fixedRanges,
-  invertPdf,
   mergePdfs,
   parsePageRanges,
   resizePages,
@@ -282,19 +280,4 @@ export const ResizePanel = ({ files, process }: ToolPanelProps) => {
   );
 };
 
-export const InvertPanel = ({ files, process, setPreview }: ToolPanelProps) => {
-  const file = files[0];
-  // Live preview with a CSS filter; the real inversion happens on export.
-  useEffect(() => {
-    setPreview?.({ cssFilter: "invert(1)" });
-    return () => setPreview?.({ cssFilter: undefined });
-  }, [setPreview]);
-  return (
-    <InvertTool
-      onInvert={() =>
-        process(async (onProgress) => [{ name: named(file, "inverted"), bytes: await invertPdf(file.bytes, onProgress) }])
-      }
-    />
-  );
-};
 

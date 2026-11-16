@@ -9,6 +9,7 @@ import {
   type WatermarkColors,
 } from "./watermark";
 import { removeVectorWatermark } from "./vector-watermark";
+import { adjustPixels, type ColorSettings } from "./color-adjust";
 
 export interface Margins {
   top: number;
@@ -118,19 +119,15 @@ export function compressPdf(bytes: Uint8Array, quality: number, onProgress?: Pro
   return rasterize(bytes, { scale, quality, onProgress });
 }
 
-export function invertPdf(bytes: Uint8Array, onProgress?: ProgressCallback) {
+/** Brightness, contrast, saturation, grayscale / black & white and invert (see color-adjust.ts). */
+export function adjustColorsPdf(bytes: Uint8Array, settings: ColorSettings, onProgress?: ProgressCallback) {
   return rasterize(bytes, {
     scale: 2,
     quality: 0.92,
     onProgress,
     transform: (ctx, canvas) => {
       const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const d = img.data;
-      for (let i = 0; i < d.length; i += 4) {
-        d[i] = 255 - d[i];
-        d[i + 1] = 255 - d[i + 1];
-        d[i + 2] = 255 - d[i + 2];
-      }
+      adjustPixels(img.data, settings);
       ctx.putImageData(img, 0, 0);
     },
   });

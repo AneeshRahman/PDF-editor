@@ -25,6 +25,8 @@ const App = () => (
           <Route index element={<Home />} />
           {/* Remove Watermark is now part of the Watermark tool. */}
           <Route path="remove-watermark" element={<Navigate to="/watermark?tab=remove" replace />} />
+          {/* Invert is now a preset of Adjust Colors. */}
+          <Route path="invert" element={<Navigate to="/colors?preset=invert" replace />} />
           <Route path=":toolId" element={<ToolRoute />} />
           <Route path="*" element={<NotFound />} />
         </Route>

@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Combine,
-  Contrast,
+  Palette,
   Crop,
   Minimize2,
   RotateCw,
@@ -13,7 +13,6 @@ import {
 import {
   CompressPanel,
   CropPanel,
-  InvertPanel,
   MergePanel,
   ResizePanel,
   RotatePanel,
@@ -21,6 +20,7 @@ import {
   type ToolPanelProps,
 } from "../components/tools/panels";
 import { WatermarkStudio } from "../components/tools/WatermarkStudio";
+import { ColorsPanel } from "../components/tools/ColorsPanel";
 
 export type ToolCategory = "organize" | "optimize" | "edit";
 
@@ -103,12 +103,12 @@ export const TOOLS: ToolDef[] = [
     Panel: ResizePanel,
   },
   {
-    id: "invert",
-    name: "Invert Colors",
-    description: "Swap light and dark, for easier reading at night.",
-    icon: Contrast,
+    id: "colors",
+    name: "Adjust Colors",
+    description: "Grayscale, black & white or inverted, or fine-tune brightness, contrast and saturation.",
+    icon: Palette,
     category: "edit",
-    Panel: InvertPanel,
+    Panel: ColorsPanel,
   },
 ];
 

@@ -2,7 +2,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { TOOLS } from "../lib/tools";
 import { cn } from "../lib/utils";
 import { Wordmark } from "./brand";
-import { ThemeSwitch } from "./ThemeSwitch";
+import { ThemeButton } from "./ThemeSwitch";
 
 const NAV = ["merge", "split", "compress", "watermark"];
 
@@ -41,7 +41,7 @@ export const AppLayout = () => (
             On-device · Private
           </span>
           <span className="hidden h-5 w-px bg-border lg:block" aria-hidden="true" />
-          <ThemeSwitch />
+          <ThemeButton />
           {/* On phones the nav is hidden, so offer a way to the tool list. */}
           <Link to="/#tools" className="rounded-md border border-border px-3 py-1.5 text-sm font-medium md:hidden">
             Tools

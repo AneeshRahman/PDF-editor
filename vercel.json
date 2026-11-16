@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/invert", "destination": "/colors?preset=invert", "permanent": true },
+    { "source": "/remove-watermark", "destination": "/watermark?tab=remove", "permanent": true }
+  ],
   "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/index.html" }],
   "headers": [
     {

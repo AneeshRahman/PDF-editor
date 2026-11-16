@@ -23,7 +23,7 @@ export const HOME_SEO: PageSeo = {
   name: SITE_NAME,
   title: "PDF Editor: free, unlimited PDF tools with no uploads",
   description:
-    "Edit PDFs free with no file size limit and unlimited use: merge, split, compress, rotate, crop, and add or remove watermarks. Files never leave your device.",
+    "Edit PDFs free, unlimited, any file size: merge, split, compress, crop, add or remove watermarks, or make a PDF black & white. Files never leave your device.",
 };
 
 export const TOOL_SEO: PageSeo[] = [
@@ -77,11 +77,11 @@ export const TOOL_SEO: PageSeo[] = [
       "Fit every page of a PDF to A4, Letter, Legal or A3 while keeping its proportions. Free and unlimited, with no file size limit and nothing uploaded.",
   },
   {
-    path: "/invert",
-    name: "Invert PDF colors",
-    title: "Invert PDF colors: dark mode for PDFs, free",
+    path: "/colors",
+    name: "Adjust PDF colors",
+    title: "Adjust PDF colors: grayscale, B&W, invert, free",
     description:
-      "Swap light and dark in a PDF for easier reading at night, with a live preview. Free, unlimited, any file size, and your file stays on your device.",
+      "Make a PDF grayscale or black & white, invert it, or tune brightness, contrast and saturation with a live preview. Free, unlimited, any file size.",
   },
 ];
 
