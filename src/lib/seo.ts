@@ -21,67 +21,67 @@ export interface PageSeo {
 export const HOME_SEO: PageSeo = {
   path: "/",
   name: SITE_NAME,
-  title: "PDF Editor: free PDF tools that never upload your files",
+  title: "PDF Editor: free, unlimited PDF tools with no uploads",
   description:
-    "Merge, split, compress, rotate, crop and watermark PDFs for free in your browser. Files are processed on your device and never uploaded. No sign-up.",
+    "Edit PDFs free with no file size limit and unlimited use: merge, split, compress, rotate, crop, and add or remove watermarks. Files never leave your device.",
 };
 
 export const TOOL_SEO: PageSeo[] = [
   {
     path: "/merge",
     name: "Merge PDF",
-    title: "Merge PDF: combine PDF files, free and private",
+    title: "Merge PDF: combine PDF files, free & unlimited",
     description:
-      "Combine several PDFs into one in the order you choose. Drag to reorder the files, then download. Runs in your browser, so nothing is uploaded.",
+      "Combine as many PDFs as you like into one, in the order you choose. No file size limit, no sign-up, and nothing is uploaded: it runs in your browser.",
   },
   {
     path: "/split",
     name: "Split PDF",
     title: "Split PDF: extract pages or split into files",
     description:
-      "Pull out page ranges, split every N pages or save each page as its own PDF. Free, no sign-up, and your file never leaves your device.",
+      "Pull out page ranges, split every N pages or save each page as its own PDF. Free and unlimited, any file size, and your file never leaves your device.",
   },
   {
     path: "/rotate",
     name: "Rotate PDF",
     title: "Rotate PDF: turn pages left, right or 180°",
     description:
-      "Rotate every page of a PDF by 90° or 180° with a live preview, then download. Free and private: processing happens in your browser.",
+      "Rotate every page of a PDF by 90° or 180° with a live preview. Free with no file size limit or usage cap; processing happens in your browser.",
   },
   {
     path: "/compress",
     name: "Compress PDF",
     title: "Compress PDF: reduce PDF file size, free",
     description:
-      "Shrink scanned and image-heavy PDFs with an adjustable quality setting. See the size saved before you download. No uploads, no account.",
+      "Shrink large scanned and image-heavy PDFs of any size and see the space saved before you download. Unlimited and free, with no uploads or account.",
   },
   {
     path: "/watermark",
     name: "Watermark",
-    title: "Add or remove a PDF watermark, free",
+    title: "Remove or add a PDF watermark, free & unlimited",
     description:
-      "Add a text or image watermark to a PDF, or brush an existing watermark away with a live before/after preview. Files never leave your device.",
+      "Remove a watermark from a PDF with a brush, or add your own text or image watermark. Live before/after preview, no file size limit, nothing uploaded.",
   },
   {
     path: "/crop",
     name: "Crop PDF",
     title: "Crop PDF: trim page margins online, free",
     description:
-      "Trim the margins off every page of a PDF and preview exactly what will be cut. Free, private and processed entirely in your browser.",
+      "Trim the margins off every page of a PDF and preview exactly what will be cut. Free and unlimited, any file size, processed entirely in your browser.",
   },
   {
     path: "/resize",
     name: "Resize PDF",
     title: "Resize PDF to A4, Letter, Legal or A3",
     description:
-      "Fit every page of a PDF to A4, Letter, Legal or A3 while keeping its proportions. Free, no sign-up, and nothing is uploaded.",
+      "Fit every page of a PDF to A4, Letter, Legal or A3 while keeping its proportions. Free and unlimited, with no file size limit and nothing uploaded.",
   },
   {
     path: "/invert",
     name: "Invert PDF colors",
     title: "Invert PDF colors: dark mode for PDFs, free",
     description:
-      "Swap light and dark in a PDF for easier reading at night, with a live preview. Free and private: your file stays on your device.",
+      "Swap light and dark in a PDF for easier reading at night, with a live preview. Free, unlimited, any file size, and your file stays on your device.",
   },
 ];
 
@@ -154,7 +154,7 @@ export function renderHead(p: PageSeo, origin: string, { noindex = false } = {})
     origin ? `<meta property="og:image" content="${esc(image)}" />` : "",
     origin ? `<meta property="og:image:width" content="1200" />` : "",
     origin ? `<meta property="og:image:height" content="630" />` : "",
-    origin ? `<meta property="og:image:alt" content="${SITE_NAME}: edit PDFs without sending them anywhere." />` : "",
+    origin ? `<meta property="og:image:alt" content="${SITE_NAME}: free, unlimited PDF tools. No file size limit, no uploads." />` : "",
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`,

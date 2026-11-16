@@ -81,7 +81,7 @@ export const TOOLS: ToolDef[] = [
   {
     id: "watermark",
     name: "Watermark",
-    description: "Add a text or image watermark, or brush an existing one away.",
+    description: "Remove a watermark with a brush, or add your own text or image watermark.",
     icon: Stamp,
     category: "edit",
     Panel: WatermarkStudio,

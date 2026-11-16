@@ -1,13 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, ArrowUpRight, Loader2, X } from "lucide-react";
 import { CATEGORIES, TOOLS, type ToolCategory, type ToolDef } from "../lib/tools";
-import { formatSize, isPdfFile, loadPdfFile, setHandoff, MAX_FILE_MB, type LoadedPdf } from "../lib/files";
+import { formatSize, isPdfFile, loadPdfFile, setHandoff, type LoadedPdf } from "../lib/files";
 import { CropMarks } from "../components/brand";
 import { cn } from "../lib/utils";
 import { HOME_SEO } from "../lib/seo";
 import { useSeo } from "../lib/useSeo";
+import { getStats, onStatsChange } from "../lib/stats";
+
+// Snapshot cached by value so useSyncExternalStore sees a stable object.
+let statsCache = getStats();
+const subscribeStats = (fn: () => void) =>
+  onStatsChange(() => {
+    statsCache = getStats();
+    fn();
+  });
+const readStats = () => statsCache;
 
 type Filter = "all" | ToolCategory;
 
@@ -15,7 +25,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 const STEPS = [
   { title: "Add a PDF", text: "Drop it in or choose it from your device. It is opened right here, in this tab." },
-  { title: "Pick a tool", text: "Merge, split, compress or watermark, with a live preview of every change." },
+  { title: "Pick a tool", text: "Merge, split, compress, or add and remove watermarks, with a live preview of every change." },
   { title: "Download", text: "Save the result, or hand it straight to the next tool without re-uploading." },
 ];
 
@@ -27,6 +37,7 @@ const Home = () => {
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
   useSeo(HOME_SEO);
+  const stats = useSyncExternalStore(subscribeStats, readStats);
 
   // The header's "Tools" link points at /#tools.
   useEffect(() => {
@@ -79,22 +90,37 @@ const Home = () => {
               sending them <span className="text-muted-foreground">anywhere.</span>
             </h1>
             <p className="mt-6 max-w-[34rem] text-lg leading-relaxed text-muted-foreground">
-              Merge, split, compress and watermark documents on your own device. No uploads, no account, no waiting
-              on a server.
+              Merge, split, compress, and add or remove watermarks on your own device. No file size limits, no
+              uploads, no account, and no cap on how much you edit.
             </p>
 
             <dl className="mt-10 grid max-w-md grid-cols-3 border-y border-border">
               {[
                 [pad(TOOLS.length), "Tools"],
-                ["0", "Uploads"],
-                [`${MAX_FILE_MB}MB`, "Per file"],
+                ["∞", "File size"],
+                [pad(stats.files), "Edited here"],
               ].map(([value, label], i) => (
                 <div key={label} className={cn("py-4", i > 0 && "border-l border-border pl-4")}>
                   <dt className="label-mono">{label}</dt>
-                  <dd className="mt-1 font-mono text-2xl font-medium tracking-tight">{value}</dd>
+                  <dd
+                    className={cn(
+                      "mt-1 font-mono text-2xl font-medium tracking-tight tabular-nums",
+                      // The infinity sign is optically small in the mono face; match the digits.
+                      value === "∞" && "font-sans text-[1.9rem] leading-8"
+                    )}
+                    data-testid={`stat-${label}`}
+                  >
+                    {value}
+                  </dd>
                 </div>
               ))}
             </dl>
+            <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
+              {stats.files
+                ? `${formatSize(stats.bytes)} of PDFs edited on this device. 0 bytes uploaded.`
+                : "Counted on this device only. Nothing is ever uploaded."}
+            </p>
           </div>
 
           {/* Drop zone, framed with printer's crop marks */}
@@ -136,7 +162,7 @@ const Home = () => {
                   {loading ? "Opening…" : dragging ? "Release to add" : "Drop PDF files here"}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Then choose what to do with them below. Up to {MAX_FILE_MB}MB per file.
+                  Any file size, as many times as you like. Then choose what to do below.
                 </p>
               </div>
               <div className="flex items-center justify-between">
@@ -162,7 +188,7 @@ const Home = () => {
                 {ready.length ? "What would you like to do?" : "Tools"}
               </h2>
             </div>
-            <div className="flex gap-6 overflow-x-auto" role="tablist" aria-label="Tool categories">
+            <div className="flex flex-wrap gap-x-6 gap-y-2" role="tablist" aria-label="Tool categories">
               {(["all", ...(Object.keys(CATEGORIES) as ToolCategory[])] as Filter[]).map((id) => (
                 <button
                   key={id}
@@ -170,7 +196,7 @@ const Home = () => {
                   aria-selected={filter === id}
                   onClick={() => setFilter(id)}
                   className={cn(
-                    "-mb-px flex items-baseline gap-1.5 whitespace-nowrap border-b-2 pb-2 text-sm transition-colors",
+                    "flex items-baseline gap-1.5 whitespace-nowrap border-b-2 pb-2 text-sm transition-colors",
                     filter === id ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -253,7 +279,17 @@ const Home = () => {
 
       <footer className="border-t border-border">
         <div className="container flex flex-col gap-2 py-6 sm:flex-row sm:items-center sm:justify-between">
-          <span className="label-mono">PDF Editor</span>
+          <span className="label-mono">
+            Made by{" "}
+            <a
+              href="https://github.com/aneeshRahman/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-brand"
+            >
+              aneeshRahman
+            </a>
+          </span>
           <span className="label-mono">Files are processed on your device · Never uploaded</span>
         </div>
       </footer>

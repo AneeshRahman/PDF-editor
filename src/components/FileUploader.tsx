@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../lib/utils";
-import { isPdfFile, MAX_FILE_MB } from "../lib/files";
+import { isPdfFile } from "../lib/files";
 import { CropMarks } from "./brand";
 
 interface FileUploaderProps {
@@ -63,7 +63,7 @@ export const FileUploader = ({ onFilesSelect, multiple = false, className }: Fil
         {multiple ? "Choose files" : "Choose a file"}
         <ArrowRight className="h-4 w-4" />
       </span>
-      <p className="label-mono mt-5">.pdf · up to {MAX_FILE_MB}MB{multiple ? " each" : ""}</p>
+      <p className="label-mono mt-5">.pdf · any file size · no uploads</p>
     </div>
   );
 };

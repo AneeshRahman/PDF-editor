@@ -6,13 +6,9 @@ import { HOME_SEO, TOOL_SEO, renderHead } from "./src/lib/seo";
 
 /**
  * The site's public URL, used for canonical links, social images and the sitemap.
- * Set SITE_URL for a custom domain; on Vercel the production domain is picked up
- * automatically. Left empty locally (absolute-only tags are then skipped).
+ * Defaults to the production site; set SITE_URL to override (e.g. a custom domain).
  */
-const SITE_URL = (
-  process.env.SITE_URL ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "")
-).replace(/\/+$/, "");
+const SITE_URL = (process.env.SITE_URL || "https://yours-pdf.vercel.app").replace(/\/+$/, "");
 
 const SEO_BLOCK = /<!--seo-->[\s\S]*?<!--\/seo-->/;
 

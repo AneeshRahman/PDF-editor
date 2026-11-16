@@ -1,7 +1,7 @@
 {
   "name": "PDF Editor",
   "short_name": "PDF Editor",
-  "description": "Free PDF tools that run in your browser. Your files are never uploaded.",
+  "description": "Free, unlimited PDF tools with no file size limit: merge, split, compress, and add or remove watermarks. Files are never uploaded.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

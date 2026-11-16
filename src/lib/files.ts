@@ -22,8 +22,6 @@ export interface ToolOutput {
   inputSize: number;
 }
 
-export const MAX_FILE_MB = 50;
-
 let nextId = 0;
 const newId = () => `f${Date.now().toString(36)}-${nextId++}`;
 
@@ -32,8 +30,13 @@ export const isPdfFile = (file: File) =>
 
 export async function loadPdfFile(file: File): Promise<LoadedPdf> {
   if (!isPdfFile(file)) throw new Error(`${file.name} is not a PDF`);
-  if (file.size > MAX_FILE_MB * 1024 * 1024) throw new Error(`${file.name} is larger than ${MAX_FILE_MB}MB`);
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  // No size limit: everything stays on the device, so the only ceiling is its memory.
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+  } catch {
+    throw new Error(`${file.name} is too large for this browser to open (the device ran out of memory).`);
+  }
   try {
     return { id: newId(), name: file.name, bytes, pageCount: await getPageCount(bytes) };
   } catch {
