@@ -23,6 +23,19 @@ type Filter = "all" | ToolCategory;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
+/** Darker 7px ticks on a cell's four corners, sitting on its border lines. */
+const CornerTicks = () => {
+  const tick = "pointer-events-none absolute h-[7px] w-[7px] border-foreground/55";
+  return (
+    <span aria-hidden="true">
+      <span className={cn(tick, "-left-px -top-px border-l border-t")} />
+      <span className={cn(tick, "-right-px -top-px border-r border-t")} />
+      <span className={cn(tick, "-bottom-px -left-px border-b border-l")} />
+      <span className={cn(tick, "-bottom-px -right-px border-b border-r")} />
+    </span>
+  );
+};
+
 const STEPS = [
   { title: "Add a PDF", text: "Drop it in or choose it from your device. It is opened right here, in this tab." },
   { title: "Pick a tool", text: "Merge, split, compress, or add and remove watermarks, with a live preview of every change." },
@@ -179,9 +192,24 @@ const Home = () => {
       </section>
 
       {/* ------------------------------ Tools ----------------------------- */}
-      <section id="tools" className="scroll-mt-14">
-        <div className="container">
-          <div className="flex flex-col gap-6 py-10 md:flex-row md:items-end md:justify-between">
+      <section id="tools" className="scroll-mt-14 overflow-hidden">
+        <div className="container relative">
+          {/* Column guides: faint lines on the grid's columns, running the full height of
+              the section, past the cells (like layout guides in a design tool). */}
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-[1.25rem] inset-y-0 grid grid-cols-2 lg:grid-cols-4">
+            {[0, 1, 2, 3].map((k) => (
+              <span
+                key={k}
+                className={cn(
+                  "border-l border-border/60",
+                  (k === 1 || k === 3) && "border-r",
+                  k === 1 && "lg:border-r-0",
+                  k >= 2 && "hidden lg:block"
+                )}
+              />
+            ))}
+          </div>
+          <div className="relative flex flex-col gap-6 px-4 py-10 sm:px-6 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="label-mono">Index</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em]">
@@ -208,7 +236,7 @@ const Home = () => {
           </div>
 
           {ready.length > 0 && (
-            <div className="mb-6 flex items-center gap-4 border border-border bg-card px-4 py-3">
+            <div className="relative mb-6 flex items-center gap-4 border border-border bg-card px-4 py-3">
               <span className="h-2 w-2 shrink-0 rounded-full bg-brand" aria-hidden="true" />
               <p className="min-w-0 flex-1 truncate text-sm">
                 <span className="font-medium">
@@ -231,8 +259,9 @@ const Home = () => {
             </div>
           )}
 
-          {/* The grid: hairline-ruled cells sharing their borders. */}
-          <div className="grid grid-cols-2 border-l border-t border-border lg:grid-cols-4">
+          {/* The grid: hairline cells sharing their borders, with darker corner ticks that
+              meet as "+" where four cells join. */}
+          <div className="relative grid grid-cols-2 border-l border-t border-border lg:grid-cols-4">
             {visible.map((tool) => {
               const Icon = tool.icon;
               const index = TOOLS.indexOf(tool) + 1;
@@ -243,6 +272,7 @@ const Home = () => {
                   onClick={(e) => openTool(tool, e)}
                   className="group relative flex min-h-[9.5rem] flex-col border-b border-r border-border bg-background p-4 transition-colors sm:min-h-[15rem] sm:p-6 hover:bg-card focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
+                  <CornerTicks />
                   <div className="flex items-start justify-between">
                     <span className="font-mono text-xs text-muted-foreground">{pad(index)}</span>
                     <span className="label-mono hidden sm:inline">{CATEGORIES[tool.category].label}</span>
@@ -255,11 +285,12 @@ const Home = () => {
               );
             })}
           </div>
+          <div className="h-24" aria-hidden="true" />
         </div>
       </section>
 
       {/* -------------------------- How it works -------------------------- */}
-      <section className="mt-24 border-t border-border">
+      <section className="border-t border-border">
         <div className="container grid lg:grid-cols-12">
           <div className="py-10 lg:col-span-3 lg:py-12">
             <p className="label-mono">Process</p>

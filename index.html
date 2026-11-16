@@ -11,7 +11,18 @@
     <meta name="apple-mobile-web-app-title" content="PDF Editor" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f8f5" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131211" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Apply the saved (or system) theme before first paint, so there is no flash. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("pdf-editor:theme");
+          if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.classList.toggle("dark", t === "dark");
+          document.documentElement.style.colorScheme = t;
+        } catch (e) {}
+      })();
+    </script>
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />

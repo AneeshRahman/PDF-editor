@@ -9,7 +9,7 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: { DEFAULT: "1.25rem", sm: "2rem" },
+      padding: "1.25rem",
       screens: {
         "2xl": "1400px",
       },
