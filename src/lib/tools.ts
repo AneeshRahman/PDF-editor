@@ -25,9 +25,11 @@ import { WatermarkStudio } from "../components/tools/WatermarkStudio";
 export type ToolCategory = "organize" | "optimize" | "edit";
 
 export const CATEGORIES: Record<ToolCategory, { label: string; tint: string }> = {
-  organize: { label: "Organize", tint: "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400" },
-  optimize: { label: "Optimize", tint: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400" },
-  edit: { label: "Edit", tint: "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400" },
+  // One neutral treatment for every category: the grid, numbering and labels carry the
+  // structure, not colour.
+  organize: { label: "Organize", tint: "border border-border bg-background text-foreground" },
+  optimize: { label: "Optimize", tint: "border border-border bg-background text-foreground" },
+  edit: { label: "Edit", tint: "border border-border bg-background text-foreground" },
 };
 
 export interface ToolDef {

@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
-import { Upload } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../lib/utils";
 import { isPdfFile, MAX_FILE_MB } from "../lib/files";
+import { CropMarks } from "./brand";
 
 interface FileUploaderProps {
   onFilesSelect: (files: File[]) => void;
@@ -38,11 +39,12 @@ export const FileUploader = ({ onFilesSelect, multiple = false, className }: Fil
       }}
       onDragLeave={() => setDragging(false)}
       className={cn(
-        "relative flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-xl cursor-pointer bg-card transition-colors",
-        dragging ? "border-primary bg-primary/5" : "border-border hover:bg-secondary/50",
+        "group relative flex h-64 w-full cursor-pointer flex-col items-center justify-center border bg-card transition-colors",
+        dragging ? "border-brand bg-brand/[0.03]" : "border-border hover:border-foreground/30",
         className
       )}
     >
+      <CropMarks active={dragging} />
       <input
         type="file"
         accept=".pdf,application/pdf"
@@ -51,17 +53,17 @@ export const FileUploader = ({ onFilesSelect, multiple = false, className }: Fil
           accept(e.target.files);
           e.target.value = ""; // allow picking the same file again
         }}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
         aria-label={multiple ? "Select PDF files" : "Select a PDF file"}
       />
-      <div className="mb-4 rounded-full bg-primary/10 p-4">
-        <Upload className="w-8 h-8 text-primary" />
-      </div>
-      <p className="mb-1 text-base text-foreground font-semibold">
-        {multiple ? "Select PDF files" : "Select a PDF file"}
+      <p className="text-xl font-medium tracking-[-0.02em]">
+        {dragging ? "Release to add" : multiple ? "Drop PDF files here" : "Drop a PDF here"}
       </p>
-      <p className="text-sm text-muted-foreground">or drop {multiple ? "them" : "it"} here</p>
-      <p className="mt-3 text-xs text-muted-foreground">Max {MAX_FILE_MB}MB per file</p>
+      <span className="mt-5 inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-all group-hover:gap-3">
+        {multiple ? "Choose files" : "Choose a file"}
+        <ArrowRight className="h-4 w-4" />
+      </span>
+      <p className="label-mono mt-5">.pdf · up to {MAX_FILE_MB}MB{multiple ? " each" : ""}</p>
     </div>
   );
 };

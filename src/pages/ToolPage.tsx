@@ -145,15 +145,15 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
   function renderWorkspace() {
     if (!files.length) {
       return (
-        <div className="container mx-auto max-w-2xl px-4 py-12 text-center">
-          <div className={cn("mx-auto mb-4 inline-flex rounded-xl p-3", CATEGORIES[tool.category].tint)}>
-            <Icon className="h-8 w-8" />
-          </div>
-          <h1 className="text-3xl font-bold">{tool.name}</h1>
-          <p className="mt-2 text-muted-foreground">{tool.description}</p>
-          <div className="mt-8">
+        <div className="container max-w-3xl py-16 md:py-20">
+          <p className="label-mono flex items-center gap-2">
+            <Icon className="h-3.5 w-3.5" /> {CATEGORIES[tool.category].label}
+          </p>
+          <h1 className="mt-4 text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">{tool.name}</h1>
+          <p className="mt-3 max-w-xl text-lg text-muted-foreground">{tool.description}</p>
+          <div className="mt-10">
             {loading ? (
-              <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-border">
+              <div className="flex h-64 items-center justify-center border border-border bg-card">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (

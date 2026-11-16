@@ -1,19 +1,18 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { FileText, ShieldCheck } from "lucide-react";
 import { TOOLS } from "../lib/tools";
 import { cn } from "../lib/utils";
+import { Wordmark } from "./brand";
 
 const NAV = ["merge", "split", "compress", "watermark"];
 
 export const AppLayout = () => (
-  <div className="min-h-screen bg-background flex flex-col">
-    <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-      <div className="container mx-auto flex h-14 items-center gap-6 px-4">
-        <Link to="/" className="flex items-center gap-2 font-semibold">
-          <FileText className="h-6 w-6 text-primary" />
-          PDF Editor
+  <div className="flex min-h-screen flex-col bg-background">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
+      <div className="container flex h-14 items-center gap-8">
+        <Link to="/" aria-label="PDF Editor home" className="shrink-0">
+          <Wordmark />
         </Link>
-        <nav className="hidden md:flex items-center gap-1 text-sm">
+        <nav className="hidden h-full items-stretch gap-6 text-sm md:flex">
           {NAV.map((id) => {
             const tool = TOOLS.find((t) => t.id === id)!;
             return (
@@ -22,8 +21,8 @@ export const AppLayout = () => (
                 to={`/${id}`}
                 className={({ isActive }) =>
                   cn(
-                    "rounded-md px-3 py-1.5 transition-colors hover:bg-muted",
-                    isActive ? "text-primary font-medium" : "text-muted-foreground"
+                    "-mb-px flex items-center border-b-2 transition-colors",
+                    isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
                   )
                 }
               >
@@ -31,19 +30,16 @@ export const AppLayout = () => (
               </NavLink>
             );
           })}
-          <NavLink to="/" end className="rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted">
+          <Link to="/#tools" className="-mb-px flex items-center border-b-2 border-transparent text-muted-foreground hover:text-foreground">
             All tools
-          </NavLink>
+          </Link>
         </nav>
-        <span className="ml-auto hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
-          <ShieldCheck className="h-4 w-4 text-emerald-600" />
-          Files never leave your device
+        <span className="label-mono ml-auto hidden items-center gap-2 lg:flex">
+          <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
+          On-device · Private
         </span>
-        {/* On phones the nav is hidden, so offer a way back to the tool list. */}
-        <Link
-          to="/#tools"
-          className="ml-auto rounded-md border border-border px-3 py-1.5 text-sm font-medium md:hidden sm:ml-0"
-        >
+        {/* On phones the nav is hidden, so offer a way to the tool list. */}
+        <Link to="/#tools" className="ml-auto rounded-md border border-border px-3 py-1.5 text-sm font-medium md:hidden">
           Tools
         </Link>
       </div>
