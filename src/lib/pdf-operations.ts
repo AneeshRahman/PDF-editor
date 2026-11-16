@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
+import { PDFDocument, degrees } from "pdf-lib";
 import { loadPdfjsDocument, type PdfjsDocument } from "./pdfjs";
 import {
   cleanPage,
@@ -10,14 +10,6 @@ import {
 } from "./watermark";
 import { removeVectorWatermark } from "./vector-watermark";
 
-export type WatermarkPosition = "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
-
-export interface WatermarkSettings {
-  text: string;
-  opacity: number; // 0..1
-  position: WatermarkPosition;
-}
-
 export interface Margins {
   top: number;
   right: number;
@@ -25,53 +17,9 @@ export interface Margins {
   left: number;
 }
 
-// Shared by the preview and the real watermark so they line up.
-export const WATERMARK_FONT_SIZE = 32;
-export const WATERMARK_EDGE_X = 70;
-export const WATERMARK_EDGE_Y = 40;
-
-/** Centre point of the watermark in top-left-origin coordinates (what a canvas uses). */
-export function watermarkAnchor(position: WatermarkPosition, width: number, height: number) {
-  switch (position) {
-    case "top-left":
-      return { x: WATERMARK_EDGE_X, y: WATERMARK_EDGE_Y };
-    case "top-right":
-      return { x: width - WATERMARK_EDGE_X, y: WATERMARK_EDGE_Y };
-    case "bottom-left":
-      return { x: WATERMARK_EDGE_X, y: height - WATERMARK_EDGE_Y };
-    case "bottom-right":
-      return { x: width - WATERMARK_EDGE_X, y: height - WATERMARK_EDGE_Y };
-    default:
-      return { x: width / 2, y: height / 2 };
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* Vector operations (pdf-lib): text stays selectable                  */
 /* ------------------------------------------------------------------ */
-
-export async function addTextWatermark(bytes: Uint8Array, settings: WatermarkSettings) {
-  const doc = await PDFDocument.load(bytes);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const size = WATERMARK_FONT_SIZE;
-  const textWidth = font.widthOfTextAtSize(settings.text, size);
-  const textHeight = font.heightAtSize(size, { descender: false });
-
-  for (const page of doc.getPages()) {
-    const { width, height } = page.getSize();
-    const anchor = watermarkAnchor(settings.position, width, height);
-    // pdf-lib uses a bottom-left origin and draws from the text baseline.
-    page.drawText(settings.text, {
-      x: anchor.x - textWidth / 2,
-      y: height - anchor.y - textHeight / 2,
-      size,
-      font,
-      color: rgb(0.4, 0.4, 0.4),
-      opacity: settings.opacity,
-    });
-  }
-  return doc.save();
-}
 
 export async function cropPages(bytes: Uint8Array, margins: Margins) {
   const doc = await PDFDocument.load(bytes);
