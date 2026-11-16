@@ -8,7 +8,7 @@ const NAV = ["merge", "split", "compress", "watermark"];
 
 export const AppLayout = () => (
   <div className="flex min-h-screen flex-col bg-background">
-    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-border bg-background">
       <div className="container flex h-14 items-center gap-8">
         <Link to="/" aria-label="PDF Editor home" className="shrink-0">
           <Wordmark />

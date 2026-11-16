@@ -10,7 +10,7 @@ import { cn } from "../lib/utils";
 /* Public types                                                         */
 /* ------------------------------------------------------------------ */
 
-export type CanvasTool = "none" | "box" | "brush" | "stamp";
+export type CanvasTool = "none" | "box" | "brush" | "stamp" | "overlay";
 
 /** A live pixel effect drawn over pages, e.g. the watermark-removal result. */
 export interface PreviewEffect {
@@ -37,6 +37,10 @@ export interface PreviewOptions {
   cropMargins?: Margins | null;
   /** Live rotation preview, in degrees (multiple of 90). */
   rotation?: number;
+  /** A tool's own interactive layer, drawn on top of each page (with tool "overlay"). */
+  overlay?: ((page: number, w: number, h: number) => React.ReactNode) | null;
+  /** Only rotate these pages (0-based) in the preview; null = all. */
+  rotationPages?: number[] | null;
   /** Show this document instead (e.g. a live, already-processed version). Zoom is kept. */
   pdfOverride?: Uint8Array | null;
   /** A watermark to add, drawn live on top (or, visually, underneath) the page. */
@@ -96,6 +100,8 @@ export const PDFPreview = ({
   cssFilter,
   cropMargins = null,
   rotation = 0,
+  rotationPages = null,
+  overlay = null,
   pdfOverride = null,
   stamp = null,
   compare = false,
@@ -453,7 +459,8 @@ export const PDFPreview = ({
           {sizes.map(({ w, h }, i) => {
             const pw = w * zoom;
             const ph = h * zoom;
-            const sideways = rot % 180 !== 0;
+            const pageRot = rotationPages && !rotationPages.includes(i) ? 0 : rot;
+            const sideways = pageRot % 180 !== 0;
             // Brush strokes only show while painting.
             const pageStrokes = tool === "brush" ? strokes.filter((s) => s.page === i).map((s) => s.stroke) : [];
             return (
@@ -472,7 +479,7 @@ export const PDFPreview = ({
               >
                 <div
                   className="absolute left-1/2 top-1/2 bg-white shadow-md transition-transform"
-                  style={{ width: pw, height: ph, transform: `translate(-50%, -50%) rotate(${rot}deg)` }}
+                  style={{ width: pw, height: ph, transform: `translate(-50%, -50%) rotate(${pageRot}deg)` }}
                 >
                   <canvas data-role="page" className="absolute inset-0 h-full w-full" style={{ filter }} />
                   <canvas
@@ -494,7 +501,7 @@ export const PDFPreview = ({
                     pageIndex={i}
                     pageW={w}
                     pageH={h}
-                    tool={panMode ? "none" : tool}
+                    tool={panMode || tool === "overlay" ? "none" : tool}
                     brushSize={brushSize}
                     selection={selection?.page === i ? selection.rect : null}
                     strokes={pageStrokes}
@@ -503,6 +510,7 @@ export const PDFPreview = ({
                     onStroke={(stroke) => onStroke?.({ page: i, stroke })}
                     onStampMove={onStampMove}
                   />
+                  {overlay?.(i, w, h)}
                   {showCompare && <SplitHandle split={split} onChange={setSplit} />}
                 </div>
               </div>

@@ -198,3 +198,7 @@ export async function addStamp(bytes: Uint8Array, s: StampSpec): Promise<Uint8Ar
   });
   return doc.save();
 }
+
+/** Width in points of `text` in a standard font (same metrics the PDF export uses). */
+export const measureText = (s: Pick<StampSpec, "font" | "bold" | "italic">, text: string, size: number) =>
+  embedderFor(pdfFontName(s)).widthOfTextAtSize(text || " ", size);

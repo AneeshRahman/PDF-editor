@@ -14,16 +14,9 @@ import {
   adjustPixels,
   isUnchanged,
   sameSettings,
-  type ColorMode,
   type ColorSettings,
 } from "../../lib/color-adjust";
 import { cn } from "../../lib/utils";
-
-const MODES: { value: ColorMode; label: string }[] = [
-  { value: "color", label: "Colour" },
-  { value: "grayscale", label: "Grayscale" },
-  { value: "bw", label: "Black & white" },
-];
 
 const SliderRow = ({
   label,
@@ -95,27 +88,6 @@ export const ColorsPanel = ({ files, process, setPreview }: ToolPanelProps) => {
               </button>
             );
           })}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Mode</Label>
-        <div role="radiogroup" aria-label="Colour mode" className="flex rounded-lg bg-muted p-1">
-          {MODES.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              role="radio"
-              aria-checked={s.mode === m.value}
-              onClick={() => set({ mode: m.value })}
-              className={cn(
-                "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition",
-                s.mode === m.value ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {m.label}
-            </button>
-          ))}
         </div>
       </div>
 

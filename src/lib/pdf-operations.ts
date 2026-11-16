@@ -535,3 +535,128 @@ export async function rotatePdf(bytes: Uint8Array, angle: number, pageIndices?: 
   });
   return doc.save();
 }
+
+/* ------------------------------------------------------------------ */
+/* File size: estimates, target size                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Compression strength on one scale: level 0 = smallest file, 1 = best quality.
+ * Lower levels reduce both JPEG quality and resolution.
+ */
+export function compressAtLevel(bytes: Uint8Array, level: number, onProgress?: ProgressCallback) {
+  const t = Math.min(1, Math.max(0, level));
+  return rasterize(bytes, { scale: 0.35 + t * 1.65, quality: 0.1 + t * 0.82, onProgress });
+}
+
+/** A few pages spread through the document, as their own PDF (for quick size estimates). */
+async function samplePages(bytes: Uint8Array, max = 3) {
+  const src = await loadPdf(bytes);
+  const n = src.getPageCount();
+  const picks = n <= max ? src.getPageIndices() : Array.from({ length: max }, (_, i) => Math.round((i * (n - 1)) / (max - 1)));
+  const out = await PDFDocument.create();
+  (await out.copyPages(src, picks)).forEach((p) => out.addPage(p));
+  return { bytes: await out.save(), sampled: picks.length, total: n };
+}
+
+const DOC_OVERHEAD = 900; // bytes of a near-empty rasterised PDF besides its pages
+
+/**
+ * Estimated output size for each level, by compressing a sample of pages and scaling up.
+ * `compress` is the function the tool will really use.
+ */
+export async function estimateSizes(
+  bytes: Uint8Array,
+  levels: number[],
+  compress: (b: Uint8Array, level: number) => Promise<Uint8Array> = (b, l) => compressAtLevel(b, l)
+) {
+  const sample = await samplePages(bytes);
+  const out: { level: number; bytes: number }[] = [];
+  for (const level of levels) {
+    const size = (await compress(sample.bytes, level)).byteLength;
+    const perPage = Math.max(0, size - DOC_OVERHEAD) / sample.sampled;
+    out.push({ level, bytes: Math.round(DOC_OVERHEAD + perPage * sample.total) });
+    await yieldToUi();
+  }
+  return out;
+}
+
+/** Linear interpolation over estimate points (sorted by level). */
+export function interpolateEstimate(points: { level: number; bytes: number }[], level: number) {
+  if (!points.length) return 0;
+  const p = [...points].sort((a, b) => a.level - b.level);
+  if (level <= p[0].level) return p[0].bytes;
+  for (let i = 1; i < p.length; i++) {
+    if (level <= p[i].level) {
+      const t = (level - p[i - 1].level) / (p[i].level - p[i - 1].level);
+      return Math.round(p[i - 1].bytes + t * (p[i].bytes - p[i - 1].bytes));
+    }
+  }
+  return p[p.length - 1].bytes;
+}
+
+/** Adds an unused filler object so the saved file is (very close to) `target` bytes. */
+async function padTo(bytes: Uint8Array, target: number) {
+  const build = async (filler: number) => {
+    const doc = await loadPdf(bytes);
+    if (filler > 0) doc.context.register(doc.context.stream(new Uint8Array(filler)));
+    return doc.save({ useObjectStreams: false });
+  };
+  let out = await build(0);
+  let filler = target - out.byteLength - 64;
+  for (let i = 0; i < 3 && filler > 0; i++) {
+    out = await build(filler);
+    if (out.byteLength === target) break;
+    filler += target - out.byteLength;
+  }
+  return out.byteLength <= target ? out : await build(Math.max(0, filler - (out.byteLength - target)));
+}
+
+export interface FitResult {
+  bytes: Uint8Array;
+  /** How the target was met. */
+  method: "unchanged" | "padded" | "lossless" | "compressed";
+  level?: number;
+}
+
+/**
+ * Brings a PDF to at most `target` bytes: first losslessly, then by compressing at the
+ * highest quality that still fits (binary search). With `pad`, smaller files are padded
+ * up to the target instead (for upload forms with a minimum size).
+ */
+export async function fitToSize(
+  bytes: Uint8Array,
+  target: number,
+  { pad = false }: { pad?: boolean } = {},
+  onProgress?: ProgressCallback
+): Promise<FitResult> {
+  if (bytes.byteLength <= target) {
+    return pad && bytes.byteLength < target ? { bytes: await padTo(bytes, target), method: "padded" } : { bytes, method: "unchanged" };
+  }
+
+  const lossless = await (await loadPdf(bytes)).save({ useObjectStreams: true });
+  if (lossless.byteLength <= target) return { bytes: lossless, method: "lossless" };
+
+  const STEPS = 7;
+  let lo = 0;
+  let hi = 1;
+  let best: { bytes: Uint8Array; level: number } | null = null;
+  let smallest = Infinity;
+  for (let i = 0; i < STEPS; i++) {
+    const level = i === 0 ? 0 : (lo + hi) / 2;
+    const out = await compressAtLevel(bytes, level);
+    smallest = Math.min(smallest, out.byteLength);
+    onProgress?.(i + 1, STEPS);
+    if (out.byteLength <= target) {
+      if (!best || level > best.level) best = { bytes: out, level };
+      lo = level;
+    } else {
+      if (i === 0) break; // even the smallest setting is too big
+      hi = level;
+    }
+  }
+  if (!best) {
+    throw new Error(`The smallest this PDF can get is about ${(smallest / 1024).toFixed(0)} KB. Choose a target of at least that.`);
+  }
+  return { bytes: best.bytes, method: "compressed", level: best.level };
+}

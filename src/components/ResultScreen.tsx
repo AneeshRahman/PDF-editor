@@ -26,7 +26,10 @@ export const ResultScreen = ({ tool, input, output, onBack, onStartOver, onConti
   const outSize = files.reduce((n, f) => n + f.bytes.byteLength, 0);
   const change = inputSize > 0 ? Math.round(((outSize - inputSize) / inputSize) * 100) : 0;
   // Tools that can take this output: single-file tools need exactly one PDF.
-  const next = TOOLS.filter((t) => t.id !== tool.id && (t.multiple || files.length === 1));
+  const usable = (t: ToolDef) => t.id !== tool.id && (t.multiple || files.length === 1);
+  // Hand-picked next steps for this tool first, then everything else.
+  const related = (tool.related ?? []).map((id) => TOOLS.find((t) => t.id === id)).filter((t): t is ToolDef => !!t && usable(t));
+  const next = TOOLS.filter((t) => usable(t) && !related.includes(t));
 
   const download = async () => {
     setDownloading(true);
@@ -118,9 +121,33 @@ export const ResultScreen = ({ tool, input, output, onBack, onStartOver, onConti
         </ul>
       )}
 
+      {related.length > 0 && (
+        <section className="mt-12" data-testid="related-tools">
+          <p className="label-mono">Related tools</p>
+          <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em]">Keep going with this file</h2>
+          <div className="mt-4 grid gap-0 border-l border-t border-border sm:grid-cols-3">
+            {related.map((t) => {
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onContinue(t)}
+                  className="group flex flex-col items-start gap-3 border-b border-r border-border bg-card p-4 text-left transition-colors hover:bg-muted"
+                >
+                  <Icon className="h-5 w-5 stroke-[1.5] transition-colors group-hover:text-brand" />
+                  <span className="text-sm font-medium">{t.name}</span>
+                  <span className="text-xs leading-relaxed text-muted-foreground">{t.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {next.length > 0 && (
-        <section className="mt-12">
-          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Continue with</h2>
+        <section className={related.length ? "mt-8" : "mt-12"}>
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">{related.length ? "All other tools" : "Continue with"}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {next.map((t) => {
               const Icon = t.icon;

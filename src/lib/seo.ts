@@ -42,18 +42,39 @@ export const TOOL_SEO: PageSeo[] = [
       "Pull out page ranges, split every N pages or save each page as its own PDF. Free and unlimited, any file size, and your file never leaves your device.",
   },
   {
+    path: "/organize",
+    name: "Organize PDF",
+    title: "Organize PDF: reorder, add and delete pages",
+    description:
+      "Rearrange PDF pages by dragging, rotate, duplicate or delete them, and add blank pages or pages from another PDF. Free, unlimited, nothing uploaded.",
+  },
+  {
     path: "/rotate",
     name: "Rotate PDF",
-    title: "Rotate PDF: turn pages left, right or 180°",
+    title: "Rotate PDF: turn all pages or a page range",
     description:
-      "Rotate every page of a PDF by 90° or 180° with a live preview. Free with no file size limit or usage cap; processing happens in your browser.",
+      "Rotate every page or just a page range by 90° or 180° with a live preview. Free with no file size limit or usage cap; processing happens in your browser.",
   },
   {
     path: "/compress",
     name: "Compress PDF",
-    title: "Compress PDF: reduce PDF file size, free",
+    title: "Compress PDF: see the size before you shrink",
     description:
-      "Shrink large scanned and image-heavy PDFs of any size and see the space saved before you download. Unlimited and free, with no uploads or account.",
+      "Compress a PDF of any size and see the expected file size for each setting before you start, like a design tool's export panel. Free, unlimited, no uploads.",
+  },
+  {
+    path: "/size",
+    name: "PDF Size Changer",
+    title: "Reduce PDF to a size: 100 KB, 200 KB, 1 MB",
+    description:
+      "Make a PDF fit an upload limit: type a target like 200 KB or 2 MB and get the best quality that fits. Can also pad small files. Free, no uploads.",
+  },
+  {
+    path: "/edit",
+    name: "Edit PDF",
+    title: "Edit PDF text online: change, remove, add text",
+    description:
+      "Edit or remove text in a PDF, see each text's font, size and colour, add new text and draw shapes in any colour. Free, unlimited, in your browser.",
   },
   {
     path: "/watermark",
@@ -67,14 +88,14 @@ export const TOOL_SEO: PageSeo[] = [
     name: "Crop PDF",
     title: "Crop PDF: trim page margins online, free",
     description:
-      "Trim the margins off every page of a PDF and preview exactly what will be cut. Free and unlimited, any file size, processed entirely in your browser.",
+      "Trim PDF page margins with linked values for all sides or each side separately, and preview exactly what will be cut. Free, unlimited, any file size.",
   },
   {
     path: "/resize",
     name: "Resize PDF",
-    title: "Resize PDF to A4, Letter, Legal or A3",
+    title: "Resize PDF: A4, Letter, A3 or custom size",
     description:
-      "Fit every page of a PDF to A4, Letter, Legal or A3 while keeping its proportions. Free and unlimited, with no file size limit and nothing uploaded.",
+      "Change PDF page size to A4, A5, A3, Letter, Legal, Tabloid or any custom size in mm or inches, with a to-scale size reference. Free and unlimited.",
   },
   {
     path: "/colors",

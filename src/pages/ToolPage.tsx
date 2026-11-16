@@ -43,6 +43,8 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
   const [strokes, setStrokes] = useState<PageStroke[]>([]);
   // What the tool panel wants the canvas to show (tool, live effect, highlights, ...).
   const [preview, setPreviewState] = useState<PreviewOptions>({});
+  // State a tool's custom workspace and its side panel share (e.g. Organize's page list).
+  const [shared, setShared] = useState<unknown>(null);
   const setPreview = useCallback((p: PreviewOptions) => setPreviewState((prev) => ({ ...prev, ...p })), []);
 
   useEffect(() => clearHandoff(), []);
@@ -121,6 +123,7 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
     setSelection(null);
     setStrokes([]);
     setPreviewState({});
+    setShared(null);
   };
 
   const Icon = tool.icon;
@@ -171,7 +174,16 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
     return (
       <div className="container mx-auto grid gap-6 px-4 py-6 lg:grid-cols-[1fr_380px]">
         <section className="min-w-0">
-          {tool.multiple ? (
+          {tool.Workspace ? (
+            <tool.Workspace
+              files={files}
+              process={process}
+              runTask={runTask}
+              setPreview={setPreview}
+              shared={shared}
+              setShared={setShared}
+            />
+          ) : tool.multiple ? (
             <FileGrid
               files={files}
               onReorder={setFiles}
@@ -234,6 +246,8 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
               strokes={strokes}
               setStrokes={setStrokes}
               setPreview={setPreview}
+              shared={shared}
+              setShared={setShared}
             />
           </fieldset>
         </aside>

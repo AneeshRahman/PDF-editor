@@ -5,20 +5,20 @@ import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
-import { CompressTool } from "./CompressTool";
 import { CropTool } from "./CropTool";
 import { ResizeTool } from "./ResizeTool";
+import { usePageScope } from "./PageScope";
 import { baseName, formatSize, type LoadedPdf, type OutputFile } from "../../lib/files";
 import { cn } from "../../lib/utils";
 import type { PageStroke, PreviewOptions } from "../PDFPreview";
 import {
-  compressPdf,
   cropPages,
   describeRange,
   fixedRanges,
   mergePdfs,
   parsePageRanges,
   resizePages,
+  loadPdf,
   rotatePdf,
   splitPdf,
   type PageRange,
@@ -32,6 +32,9 @@ export interface ToolPanelProps {
   process: (op: (onProgress: ProgressCallback) => Promise<OutputFile[]>) => void;
   /** Like process, but without the results page: returns the value for the panel to use. */
   runTask?: <T>(op: (onProgress: ProgressCallback) => Promise<T>) => Promise<T | undefined>;
+  /** State shared by a tool's custom Workspace and its panel (the tool decides its shape). */
+  shared?: unknown;
+  setShared?: (value: unknown | ((prev: unknown) => unknown)) => void;
   /** The area dragged on the preview (tools with areaSelect only). */
   selection?: AreaSelection | null;
   setSelection?: (selection: AreaSelection | null) => void;
@@ -196,9 +199,15 @@ export const SplitPanel = ({ files, process }: ToolPanelProps) => {
 export const RotatePanel = ({ files, process, setPreview }: ToolPanelProps) => {
   const file = files[0];
   const [angle, setAngle] = useState(90);
-  // Live preview: the canvas shows the pages already rotated.
-  useEffect(() => setPreview?.({ rotation: angle }), [angle, setPreview]);
-  useEffect(() => () => setPreview?.({ rotation: 0 }), [setPreview]);
+  const scope = usePageScope(file.pageCount, "Pages to rotate");
+  const pagesKey = scope.pages?.join(",") ?? "all";
+  // Live preview: the canvas shows the chosen pages already rotated.
+  useEffect(
+    () => setPreview?.({ rotation: angle, rotationPages: scope.pages }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pagesKey stands in for scope.pages
+    [angle, pagesKey, setPreview]
+  );
+  useEffect(() => () => setPreview?.({ rotation: 0, rotationPages: null }), [setPreview]);
   const options = [
     { value: 270, label: "Left 90°", icon: RotateCcw },
     { value: 90, label: "Right 90°", icon: RotateCw },
@@ -207,16 +216,17 @@ export const RotatePanel = ({ files, process, setPreview }: ToolPanelProps) => {
   return (
     <Panel>
       <div className="space-y-2">
-        <Label>Rotate all pages</Label>
+        <Label>Direction</Label>
         <div className="grid grid-cols-3 gap-2">
           {options.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
               type="button"
+              aria-pressed={angle === value}
               onClick={() => setAngle(value)}
               className={cn(
                 "flex flex-col items-center gap-1 rounded-lg border p-3 text-xs transition",
-                angle === value ? "border-primary bg-primary/5 text-primary" : "border-border hover:bg-muted"
+                angle === value ? "border-foreground bg-foreground text-background" : "border-border hover:bg-muted"
               )}
             >
               <Icon className="h-5 w-5" />
@@ -225,12 +235,18 @@ export const RotatePanel = ({ files, process, setPreview }: ToolPanelProps) => {
           ))}
         </div>
       </div>
+      {scope.ui}
       <Button
         className="w-full"
         size="lg"
-        onClick={() => process(async () => [{ name: named(file, "rotated"), bytes: await rotatePdf(file.bytes, angle) }])}
+        disabled={!!scope.error || scope.pages?.length === 0}
+        onClick={() =>
+          process(async () => [
+            { name: named(file, "rotated"), bytes: await rotatePdf(file.bytes, angle, scope.pages ?? undefined) },
+          ])
+        }
       >
-        Rotate PDF
+        Rotate {scope.pages ? `${scope.pages.length} page${scope.pages.length === 1 ? "" : "s"}` : "PDF"}
       </Button>
     </Panel>
   );
@@ -238,25 +254,6 @@ export const RotatePanel = ({ files, process, setPreview }: ToolPanelProps) => {
 
 /* ------------------------- Optimize / Edit ------------------------ */
 
-export const CompressPanel = ({ files, process }: ToolPanelProps) => {
-  const file = files[0];
-  return (
-    <CompressTool
-      onCompress={(quality) =>
-        process(async (onProgress) => {
-          const bytes = await compressPdf(file.bytes, quality, onProgress);
-          if (bytes.byteLength >= file.bytes.byteLength) {
-            throw new Error(
-              `It would grow to ${formatSize(bytes.byteLength)}, so nothing was changed. ` +
-                "Text-only PDFs are already small; try a lower quality or a scanned PDF."
-            );
-          }
-          return [{ name: named(file, "compressed"), bytes }];
-        })
-      }
-    />
-  );
-};
 
 export const CropPanel = ({ files, process, setPreview }: ToolPanelProps) => {
   const file = files[0];
@@ -271,8 +268,17 @@ export const CropPanel = ({ files, process, setPreview }: ToolPanelProps) => {
 
 export const ResizePanel = ({ files, process }: ToolPanelProps) => {
   const file = files[0];
+  const [current, setCurrent] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadPdf(file.bytes).then((d) => live && setCurrent(d.getPage(0).getSize()));
+    return () => {
+      live = false;
+    };
+  }, [file.bytes]);
   return (
     <ResizeTool
+      current={current}
       onResize={(s) =>
         process(async () => [{ name: named(file, "resized"), bytes: await resizePages(file.bytes, s) }])
       }

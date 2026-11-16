@@ -1,9 +1,12 @@
 import type { ComponentType } from "react";
 import {
   Combine,
-  Palette,
   Crop,
+  FileDown,
+  LayoutGrid,
   Minimize2,
+  Palette,
+  PenLine,
   RotateCw,
   Scaling,
   Split,
@@ -11,7 +14,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
-  CompressPanel,
   CropPanel,
   MergePanel,
   ResizePanel,
@@ -21,6 +23,9 @@ import {
 } from "../components/tools/panels";
 import { WatermarkStudio } from "../components/tools/WatermarkStudio";
 import { ColorsPanel } from "../components/tools/ColorsPanel";
+import { CompressPanel, SizePanel } from "../components/tools/OptimizePanels";
+import { OrganizePanel, OrganizeWorkspace } from "../components/tools/OrganizeTool";
+import { EditPdfPanel } from "../components/tools/EditPdf";
 
 export type ToolCategory = "organize" | "optimize" | "edit";
 
@@ -41,6 +46,10 @@ export interface ToolDef {
   category: ToolCategory;
   /** Accepts several input files (shows the reorderable file grid instead of a page preview). */
   multiple?: boolean;
+  /** Tools suggested after this one finishes (ids), most useful first. */
+  related?: string[];
+  /** Replaces the page preview with the tool's own workspace (e.g. a page grid). */
+  Workspace?: ComponentType<ToolPanelProps>;
   Panel: ComponentType<ToolPanelProps>;
 }
 
@@ -52,6 +61,7 @@ export const TOOLS: ToolDef[] = [
     icon: Combine,
     category: "organize",
     multiple: true,
+    related: ["compress", "organize", "size"],
     Panel: MergePanel,
   },
   {
@@ -60,23 +70,54 @@ export const TOOLS: ToolDef[] = [
     description: "Pull out page ranges, or break a PDF into separate files.",
     icon: Split,
     category: "organize",
+    related: ["merge", "organize", "compress"],
     Panel: SplitPanel,
+  },
+  {
+    id: "organize",
+    name: "Organize PDF",
+    description: "Reorder, rotate, duplicate or delete pages, and add blank pages or pages from another PDF.",
+    icon: LayoutGrid,
+    category: "organize",
+    related: ["compress", "edit", "merge"],
+    Workspace: OrganizeWorkspace,
+    Panel: OrganizePanel,
   },
   {
     id: "rotate",
     name: "Rotate PDF",
-    description: "Turn every page left, right or upside down.",
+    description: "Turn all pages, or a page range, left, right or upside down.",
     icon: RotateCw,
     category: "organize",
+    related: ["organize", "merge", "compress"],
     Panel: RotatePanel,
   },
   {
     id: "compress",
     name: "Compress PDF",
-    description: "Shrink scanned and image-heavy PDFs.",
+    description: "Shrink a PDF and see the expected size before you compress.",
     icon: Minimize2,
     category: "optimize",
+    related: ["size", "merge", "split"],
     Panel: CompressPanel,
+  },
+  {
+    id: "size",
+    name: "PDF Size Changer",
+    description: "Make a PDF fit a size limit, like 200 KB or 2 MB.",
+    icon: FileDown,
+    category: "optimize",
+    related: ["compress", "merge", "split"],
+    Panel: SizePanel,
+  },
+  {
+    id: "edit",
+    name: "Edit PDF",
+    description: "Edit or remove existing text, add your own text, and draw shapes.",
+    icon: PenLine,
+    category: "edit",
+    related: ["watermark", "compress", "organize"],
+    Panel: EditPdfPanel,
   },
   {
     id: "watermark",
@@ -84,22 +125,25 @@ export const TOOLS: ToolDef[] = [
     description: "Remove a watermark with a brush, or add your own text or image watermark.",
     icon: Stamp,
     category: "edit",
+    related: ["compress", "edit", "merge"],
     Panel: WatermarkStudio,
   },
   {
     id: "crop",
     name: "Crop PDF",
-    description: "Trim the margins off every page.",
+    description: "Trim page margins, the same on every side or each side separately.",
     icon: Crop,
     category: "edit",
+    related: ["resize", "compress", "rotate"],
     Panel: CropPanel,
   },
   {
     id: "resize",
     name: "Resize PDF",
-    description: "Fit pages to A4, Letter, Legal or A3.",
+    description: "Change the page size to A4, Letter, A3 or any custom size.",
     icon: Scaling,
     category: "edit",
+    related: ["crop", "compress", "organize"],
     Panel: ResizePanel,
   },
   {
@@ -108,6 +152,7 @@ export const TOOLS: ToolDef[] = [
     description: "Grayscale, black & white or inverted, or fine-tune brightness, contrast and saturation.",
     icon: Palette,
     category: "edit",
+    related: ["compress", "watermark", "edit"],
     Panel: ColorsPanel,
   },
 ];
