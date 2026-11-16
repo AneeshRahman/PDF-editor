@@ -196,7 +196,7 @@ const Home = () => {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
           {visible.map((tool) => {
             const Icon = tool.icon;
             return (

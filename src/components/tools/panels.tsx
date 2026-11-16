@@ -9,12 +9,10 @@ import { CompressTool } from "./CompressTool";
 import { CropTool } from "./CropTool";
 import { InvertTool } from "./InvertTool";
 import { ResizeTool } from "./ResizeTool";
-import { WatermarkTool } from "./WatermarkTool";
 import { baseName, formatSize, type LoadedPdf, type OutputFile } from "../../lib/files";
 import { cn } from "../../lib/utils";
 import type { PageStroke, PreviewOptions } from "../PDFPreview";
 import {
-  addTextWatermark,
   compressPdf,
   cropPages,
   describeRange,
@@ -27,7 +25,6 @@ import {
   splitPdf,
   type PageRange,
   type ProgressCallback,
-  type WatermarkSettings,
   type AreaSelection,
 } from "../../lib/pdf-operations";
 
@@ -35,8 +32,8 @@ export interface ToolPanelProps {
   files: LoadedPdf[];
   /** Runs the operation with a busy state, progress and error handling, then shows the result screen. */
   process: (op: (onProgress: ProgressCallback) => Promise<OutputFile[]>) => void;
-  /** Live watermark preview (only the watermark tool uses it). */
-  onPreviewWatermark?: (settings: WatermarkSettings) => void;
+  /** Like process, but without the results page: returns the value for the panel to use. */
+  runTask?: <T>(op: (onProgress: ProgressCallback) => Promise<T>) => Promise<T | undefined>;
   /** The area dragged on the preview (tools with areaSelect only). */
   selection?: AreaSelection | null;
   setSelection?: (selection: AreaSelection | null) => void;
@@ -258,18 +255,6 @@ export const CompressPanel = ({ files, process }: ToolPanelProps) => {
           }
           return [{ name: named(file, "compressed"), bytes }];
         })
-      }
-    />
-  );
-};
-
-export const WatermarkPanel = ({ files, process, onPreviewWatermark }: ToolPanelProps) => {
-  const file = files[0];
-  return (
-    <WatermarkTool
-      onWatermarkChange={(s) => onPreviewWatermark?.(s)}
-      onApply={(s) =>
-        process(async () => [{ name: named(file, "watermarked"), bytes: await addTextWatermark(file.bytes, s) }])
       }
     />
   );

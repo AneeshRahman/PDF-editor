@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Toaster } from "./components/ui/toaster";
 import { Toaster as Sonner } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
@@ -23,6 +23,8 @@ const App = () => (
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<Home />} />
+          {/* Remove Watermark is now part of the Watermark tool. */}
+          <Route path="remove-watermark" element={<Navigate to="/watermark?tab=remove" replace />} />
           <Route path=":toolId" element={<ToolRoute />} />
           <Route path="*" element={<NotFound />} />
         </Route>

@@ -20,11 +20,10 @@ import {
   type OutputFile,
   type ToolOutput,
 } from "../lib/files";
-import type { AreaSelection, ProgressCallback, WatermarkSettings } from "../lib/pdf-operations";
+import type { AreaSelection, ProgressCallback } from "../lib/pdf-operations";
 import { CATEGORIES, type ToolDef } from "../lib/tools";
 import { cn } from "../lib/utils";
 
-const NO_WATERMARK: WatermarkSettings = { text: "", opacity: 0.3, position: "center" };
 
 export const ToolPage = ({ tool }: { tool: ToolDef }) => {
   const navigate = useNavigate();
@@ -37,7 +36,6 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [result, setResult] = useState<ToolOutput | null>(null);
-  const [watermark, setWatermark] = useState<WatermarkSettings>(NO_WATERMARK);
   const [selection, setSelection] = useState<AreaSelection | null>(null);
   const [strokes, setStrokes] = useState<PageStroke[]>([]);
   // What the tool panel wants the canvas to show (tool, live effect, highlights, ...).
@@ -87,6 +85,28 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
     }
   };
 
+  /**
+   * Runs an operation with the busy state, progress and error toast, but no results page:
+   * the panel uses the returned value itself (e.g. to download straight away).
+   */
+  const runTask = async <T,>(op: (onProgress: ProgressCallback) => Promise<T>): Promise<T | undefined> => {
+    if (busy) return undefined;
+    setBusy(true);
+    setProgress(null);
+    try {
+      return await op((page, total) => setProgress((page / total) * 100));
+    } catch (err) {
+      console.error(err);
+      toast.error(`${tool.name} failed`, {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+      return undefined;
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
   const continueWith = async (next: ToolDef) => {
     if (!result) return;
     setHandoff(await Promise.all(result.files.map(toLoadedPdf)));
@@ -96,7 +116,6 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
   const startOver = () => {
     setResult(null);
     setFiles([]);
-    setWatermark(NO_WATERMARK);
     setSelection(null);
     setStrokes([]);
     setPreviewState({});
@@ -161,9 +180,6 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
             <div className="h-[calc(100vh-8rem)] min-h-[500px]">
               <PDFPreview
                 pdfData={file.bytes}
-                watermarkText={tool.watermarkPreview ? watermark.text : ""}
-                watermarkOpacity={watermark.opacity}
-                watermarkPosition={watermark.position}
                 {...preview}
                 selection={selection}
                 onSelectionChange={setSelection}
@@ -174,7 +190,7 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
           )}
         </section>
 
-        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
           <div className="rounded-lg border border-border bg-card p-4">
             <div className="flex items-center gap-3">
               <span className={cn("rounded-lg p-2", CATEGORIES[tool.category].tint)}>
@@ -210,7 +226,7 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
             <Panel
               files={files}
               process={process}
-              onPreviewWatermark={setWatermark}
+              runTask={runTask}
               selection={selection}
               setSelection={setSelection}
               strokes={strokes}

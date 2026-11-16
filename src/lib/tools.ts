@@ -3,7 +3,6 @@ import {
   Combine,
   Contrast,
   Crop,
-  Eraser,
   Minimize2,
   RotateCw,
   Scaling,
@@ -19,10 +18,9 @@ import {
   ResizePanel,
   RotatePanel,
   SplitPanel,
-  WatermarkPanel,
   type ToolPanelProps,
 } from "../components/tools/panels";
-import { RemoveWatermarkPanel } from "../components/tools/RemoveWatermarkPanel";
+import { WatermarkStudio } from "../components/tools/WatermarkStudio";
 
 export type ToolCategory = "organize" | "optimize" | "edit";
 
@@ -41,8 +39,6 @@ export interface ToolDef {
   category: ToolCategory;
   /** Accepts several input files (shows the reorderable file grid instead of a page preview). */
   multiple?: boolean;
-  /** Uses the live watermark overlay on the preview. */
-  watermarkPreview?: boolean;
   Panel: ComponentType<ToolPanelProps>;
 }
 
@@ -82,12 +78,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     id: "watermark",
-    name: "Add Watermark",
-    description: "Stamp text over every page, with a live preview.",
+    name: "Watermark",
+    description: "Add a text or image watermark, or brush an existing one away.",
     icon: Stamp,
     category: "edit",
-    watermarkPreview: true,
-    Panel: WatermarkPanel,
+    Panel: WatermarkStudio,
   },
   {
     id: "crop",
@@ -112,14 +107,6 @@ export const TOOLS: ToolDef[] = [
     icon: Contrast,
     category: "edit",
     Panel: InvertPanel,
-  },
-  {
-    id: "remove-watermark",
-    name: "Remove Watermark",
-    description: "Select a watermark on the page and erase it, or find every copy.",
-    icon: Eraser,
-    category: "edit",
-    Panel: RemoveWatermarkPanel,
   },
 ];
 

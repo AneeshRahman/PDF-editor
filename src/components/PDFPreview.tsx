@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Eye, Hand, Maximize, Minus, Plus } from "lucide-react";
+import { Eye, Hand, Maximize, Minus, Plus, SquareSplitHorizontal } from "lucide-react";
 import { loadPdfjsDocument, type PdfjsDocument } from "../lib/pdfjs";
-import {
-  WATERMARK_FONT_SIZE,
-  watermarkAnchor,
-  type AreaSelection,
-  type Margins,
-  type PageRects,
-  type WatermarkPosition,
-} from "../lib/pdf-operations";
+import type { AreaSelection, Margins, PageRects } from "../lib/pdf-operations";
+import { appliesToPage, cssFontFamily, stampCenters, stampSize, type StampSpec } from "../lib/stamp";
 import type { Patch, Rect, Stroke } from "../lib/watermark";
 import { cn } from "../lib/utils";
 
@@ -16,7 +10,7 @@ import { cn } from "../lib/utils";
 /* Public types                                                         */
 /* ------------------------------------------------------------------ */
 
-export type CanvasTool = "none" | "box" | "brush";
+export type CanvasTool = "none" | "box" | "brush" | "stamp";
 
 /** A live pixel effect drawn over pages, e.g. the watermark-removal result. */
 export interface PreviewEffect {
@@ -45,13 +39,16 @@ export interface PreviewOptions {
   rotation?: number;
   /** Show this document instead (e.g. a live, already-processed version). Zoom is kept. */
   pdfOverride?: Uint8Array | null;
+  /** A watermark to add, drawn live on top (or, visually, underneath) the page. */
+  stamp?: StampSpec | null;
+  /** Offer the Before/After split slider. */
+  compare?: boolean;
+  /** With the "stamp" tool: the user clicked/dragged to place the watermark (page fractions). */
+  onStampMove?: (position: { x: number; y: number }) => void;
 }
 
 interface PDFPreviewProps extends PreviewOptions {
   pdfData: Uint8Array | null;
-  watermarkText?: string;
-  watermarkOpacity?: number;
-  watermarkPosition?: WatermarkPosition;
   selection?: AreaSelection | null;
   onSelectionChange?: (selection: AreaSelection | null) => void;
   strokes?: PageStroke[];
@@ -71,11 +68,14 @@ interface PageEls {
   wrapper: HTMLDivElement;
   canvas: HTMLCanvasElement;
   fx: HTMLCanvasElement;
+  /** The original document's page, for the "before" side of the split view. */
+  orig: HTMLCanvasElement | null;
 }
 
 interface PageRenderState {
   scale: number;
   effectKey: string | null;
+  origScale: number;
 }
 
 const isTyping = (t: EventTarget | null) => {
@@ -85,9 +85,6 @@ const isTyping = (t: EventTarget | null) => {
 
 export const PDFPreview = ({
   pdfData,
-  watermarkText = "",
-  watermarkOpacity = 0.3,
-  watermarkPosition = "center",
   tool = "none",
   brushSize = 24,
   selection = null,
@@ -100,6 +97,9 @@ export const PDFPreview = ({
   cropMargins = null,
   rotation = 0,
   pdfOverride = null,
+  stamp = null,
+  compare = false,
+  onStampMove,
   className,
 }: PDFPreviewProps) => {
   const zoomSet = useRef(false);
@@ -116,6 +116,28 @@ export const PDFPreview = ({
   const [showResult, setShowResult] = useState(true);
   // "Hold for original" also swaps a processed document back to the original.
   const shownPdf = showResult && pdfOverride ? pdfOverride : pdfData;
+  const [compareOn, setCompareOn] = useState(false);
+  const [split, setSplit] = useState(0.5);
+  const showCompare = compare && compareOn;
+  // For the split view's "before" side when the shown document is a processed copy.
+  const [origDoc, setOrigDoc] = useState<PdfjsDocument | null>(null);
+  const needOrig = showCompare && !!pdfOverride && !!pdfData;
+  useEffect(() => {
+    if (!needOrig || !pdfData) return;
+    let cancelled = false;
+    let d: PdfjsDocument | null = null;
+    loadPdfjsDocument(pdfData).then((doc) => {
+      d = doc;
+      if (cancelled) doc.destroy();
+      else setOrigDoc(doc);
+    });
+    return () => {
+      cancelled = true;
+      setOrigDoc(null);
+      renderState.current.forEach((st) => (st.origScale = 0));
+      d?.destroy();
+    };
+  }, [needOrig, pdfData]);
   const [handTool, setHandTool] = useState(false);
   const [spaceDown, setSpaceDown] = useState(false);
   const [panning, setPanning] = useState(false);
@@ -139,7 +161,7 @@ export const PDFPreview = ({
           s.push({ w: v.width, h: v.height });
         }
         if (cancelled) return;
-        renderState.current = s.map(() => ({ scale: 0, effectKey: null }));
+        renderState.current = s.map(() => ({ scale: 0, effectKey: null, origScale: 0 }));
         // Start at "fit width", but never above 100%. Swapping documents keeps the zoom.
         const el = scrollRef.current;
         if (el && !zoomSet.current) {
@@ -236,6 +258,29 @@ export const PDFPreview = ({
           }
           st.effectKey = wantKey;
         }
+
+        // "Before" side of the split view.
+        if (origDoc && els.orig && near && i < origDoc.numPages && Math.abs(st.origScale - st.scale) > 0.01) {
+          try {
+            const page = await origDoc.getPage(i + 1);
+            if (cancelled) return;
+            const vp = page.getViewport({ scale: st.scale });
+            const off = document.createElement("canvas");
+            off.width = els.canvas.width;
+            off.height = els.canvas.height;
+            const task = page.render({ canvasContext: off.getContext("2d")!, viewport: vp, canvas: off });
+            tasks.push(task);
+            await task.promise;
+            if (cancelled) return;
+            els.orig.width = off.width;
+            els.orig.height = off.height;
+            els.orig.getContext("2d")!.drawImage(off, 0, 0);
+            st.origScale = st.scale;
+          } catch (err) {
+            if (cancelled) return;
+            console.error(err);
+          }
+        }
       }
     }, 120);
 
@@ -244,7 +289,7 @@ export const PDFPreview = ({
       clearTimeout(timer);
       tasks.forEach((t) => t.cancel());
     };
-  }, [doc, sizes, zoom, renderTick, effect]);
+  }, [doc, sizes, zoom, renderTick, effect, origDoc]);
 
   /* ------------------------------ Zoom ------------------------------ */
 
@@ -383,6 +428,8 @@ export const PDFPreview = ({
   const live = showResult;
   const rot = live ? ((rotation % 360) + 360) % 360 : 0;
   const filter = live ? cssFilter : undefined;
+  // In the split view the result (effects, new watermark) shows right of the divider only.
+  const afterClip = showCompare ? `inset(0 0 0 ${split * 100}%)` : undefined;
 
   return (
     <div className={cn("relative h-full w-full overflow-hidden rounded-lg bg-muted", className)}>
@@ -407,7 +454,8 @@ export const PDFPreview = ({
             const pw = w * zoom;
             const ph = h * zoom;
             const sideways = rot % 180 !== 0;
-            const pageStrokes = strokes.filter((s) => s.page === i).map((s) => s.stroke);
+            // Brush strokes only show while painting.
+            const pageStrokes = tool === "brush" ? strokes.filter((s) => s.page === i).map((s) => s.stroke) : [];
             return (
               <div
                 key={i}
@@ -416,7 +464,8 @@ export const PDFPreview = ({
                   if (!wrapper) return;
                   const canvas = wrapper.querySelector<HTMLCanvasElement>("canvas[data-role=page]")!;
                   const fx = wrapper.querySelector<HTMLCanvasElement>("canvas[data-role=fx]")!;
-                  pageEls.current[i] = { wrapper, canvas, fx };
+                  const orig = wrapper.querySelector<HTMLCanvasElement>("canvas[data-role=orig]");
+                  pageEls.current[i] = { wrapper, canvas, fx, orig };
                 }}
                 className="relative shrink-0"
                 style={{ width: sideways ? ph : pw, height: sideways ? pw : ph }}
@@ -429,9 +478,17 @@ export const PDFPreview = ({
                   <canvas
                     data-role="fx"
                     className="pointer-events-none absolute inset-0 h-full w-full"
-                    style={{ filter, visibility: live ? "visible" : "hidden" }}
+                    style={{ filter, visibility: live ? "visible" : "hidden", clipPath: afterClip }}
                   />
-                  {watermarkText.trim() && <WatermarkOverlay w={w} h={h} text={watermarkText} opacity={watermarkOpacity} position={watermarkPosition} />}
+                  {live && stamp && appliesToPage(stamp, i) && <StampOverlay w={w} h={h} s={stamp} clip={afterClip} />}
+                  {/* "Before" side of the split view: the original page, left of the divider. */}
+                  {needOrig && (
+                    <canvas
+                      data-role="orig"
+                      className="pointer-events-none absolute inset-0 h-full w-full"
+                      style={{ clipPath: `inset(0 ${(1 - split) * 100}% 0 0)` }}
+                    />
+                  )}
                   {live && cropMargins && <CropShade w={w} h={h} m={cropMargins} />}
                   <PageLayer
                     pageIndex={i}
@@ -444,7 +501,9 @@ export const PDFPreview = ({
                     highlights={highlights?.[i] ?? []}
                     onSelect={(rect) => onSelectionChange?.(rect ? { page: i, rect } : null)}
                     onStroke={(stroke) => onStroke?.({ page: i, stroke })}
+                    onStampMove={onStampMove}
                   />
+                  {showCompare && <SplitHandle split={split} onChange={setSplit} />}
                 </div>
               </div>
             );
@@ -481,7 +540,25 @@ export const PDFPreview = ({
             <ToolbarButton onClick={fitWidth} label="Fit width">
               <Maximize className="h-4 w-4" />
             </ToolbarButton>
-            {hasLivePreview && (
+            {compare && (
+              <>
+                <Divider />
+                <button
+                  type="button"
+                  aria-pressed={compareOn}
+                  title="Compare before and after"
+                  onClick={() => setCompareOn((v) => !v)}
+                  className={cn(
+                    "flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-muted",
+                    compareOn && "bg-primary/10 text-primary"
+                  )}
+                >
+                  <SquareSplitHorizontal className="h-4 w-4" />
+                  <span className="hidden sm:inline">Before / After</span>
+                </button>
+              </>
+            )}
+            {hasLivePreview && !compare && (
               <>
                 <Divider />
                 <button
@@ -541,36 +618,98 @@ const ToolbarButton = ({
   </button>
 );
 
-/** The "Add watermark" live preview, as SVG so it stays sharp at any zoom. */
-const WatermarkOverlay = ({
-  w,
-  h,
-  text,
-  opacity,
-  position,
-}: {
-  w: number;
-  h: number;
-  text: string;
-  opacity: number;
-  position: WatermarkPosition;
-}) => {
-  const { x, y } = watermarkAnchor(position, w, h);
+/** The watermark being added, as SVG so it stays sharp at any zoom. */
+const StampOverlay = ({ w, h, s, clip }: { w: number; h: number; s: StampSpec; clip?: string }) => {
+  const size = stampSize(s, w);
+  const centers = stampCenters(s, w, h);
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="pointer-events-none absolute inset-0 h-full w-full">
-      <text
-        x={x}
-        y={y}
-        fontSize={WATERMARK_FONT_SIZE}
-        fontFamily="Helvetica, Arial, sans-serif"
-        fill="#666666"
-        opacity={opacity}
-        textAnchor="middle"
-        dominantBaseline="middle"
-      >
-        {text}
-      </text>
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      data-testid="stamp-overlay"
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      // "Below content": multiply lets the page's dark content show over the watermark.
+      style={{ clipPath: clip, mixBlendMode: s.below ? "multiply" : undefined }}
+    >
+      {centers.map((c, k) => (
+        <g key={k} transform={`translate(${c.x} ${c.y}) rotate(${-s.rotation})`} opacity={s.opacity}>
+          {s.kind === "text" ? (
+            <>
+              <text
+                x={0}
+                y={0.35 * s.size}
+                fontSize={s.size}
+                fontFamily={cssFontFamily(s.font)}
+                fontWeight={s.bold ? 700 : 400}
+                fontStyle={s.italic ? "italic" : "normal"}
+                fill={s.color}
+                textAnchor="middle"
+                textLength={size.w}
+                lengthAdjust="spacingAndGlyphs"
+              >
+                {s.text}
+              </text>
+              {s.underline && (
+                <line
+                  x1={-size.w / 2}
+                  x2={size.w / 2}
+                  y1={0.47 * s.size}
+                  y2={0.47 * s.size}
+                  stroke={s.color}
+                  strokeWidth={Math.max(0.5, s.size * 0.06)}
+                />
+              )}
+            </>
+          ) : (
+            s.image && (
+              <image
+                href={s.image.url}
+                x={-size.w / 2}
+                y={-size.h / 2}
+                width={size.w}
+                height={size.h}
+                preserveAspectRatio="none"
+              />
+            )
+          )}
+        </g>
+      ))}
     </svg>
+  );
+};
+
+/** The draggable divider of the Before/After split view. */
+const SplitHandle = ({ split, onChange }: { split: number; onChange: (v: number) => void }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const move = (e: React.PointerEvent) => {
+    const box = ref.current?.parentElement?.getBoundingClientRect();
+    if (box) onChange(Math.min(1, Math.max(0, (e.clientX - box.left) / box.width)));
+  };
+  return (
+    <div
+      ref={ref}
+      data-testid="split-handle"
+      className="absolute inset-y-0 z-10 w-6 -translate-x-1/2 cursor-ew-resize touch-none"
+      style={{ left: `${split * 100}%` }}
+      onPointerDown={(e) => {
+        // Don't let the page underneath start a brush stroke or a drag.
+        e.stopPropagation();
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        move(e);
+      }}
+      onPointerMove={(e) => e.currentTarget.hasPointerCapture(e.pointerId) && move(e)}
+    >
+      <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-primary shadow" />
+      <div className="absolute left-1/2 top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-primary bg-background text-primary shadow-md">
+        <SquareSplitHorizontal className="h-4 w-4" />
+      </div>
+      <span className="pointer-events-none absolute left-0 top-2 -translate-x-full rounded bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
+        Before
+      </span>
+      <span className="pointer-events-none absolute right-0 top-2 translate-x-full rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+        After
+      </span>
+    </div>
   );
 };
 
@@ -615,6 +754,7 @@ interface PageLayerProps {
   highlights: Rect[];
   onSelect: (rect: Rect | null) => void;
   onStroke: (stroke: Stroke) => void;
+  onStampMove?: (position: { x: number; y: number }) => void;
 }
 
 const MIN_SELECTION_PX = 6;
@@ -631,6 +771,7 @@ const PageLayer = ({
   highlights,
   onSelect,
   onStroke,
+  onStampMove,
 }: PageLayerProps) => {
   const ref = useRef<HTMLDivElement>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -662,7 +803,8 @@ const PageLayer = ({
       className={cn(
         "absolute inset-0",
         tool === "box" && "cursor-crosshair touch-none select-none",
-        tool === "brush" && "cursor-none touch-none select-none"
+        tool === "brush" && "cursor-none touch-none select-none",
+        tool === "stamp" && "cursor-move touch-none select-none"
       )}
       onPointerDown={(e) => {
         if (tool === "none" || e.button !== 0) return;
@@ -670,14 +812,16 @@ const PageLayer = ({
         ref.current!.setPointerCapture(e.pointerId);
         const p = point(e);
         start.current = p;
-        if (tool === "box") setDraftBox({ ...p, w: 0, h: 0 });
+        if (tool === "stamp") onStampMove?.(p);
+        else if (tool === "box") setDraftBox({ ...p, w: 0, h: 0 });
         else setDraftStroke([p]);
       }}
       onPointerMove={(e) => {
         const p = point(e);
         if (tool === "brush") setHover(p);
         if (!start.current) return;
-        if (tool === "box") setDraftBox(between(start.current, p));
+        if (tool === "stamp") onStampMove?.(p);
+        else if (tool === "box") setDraftBox(between(start.current, p));
         else
           setDraftStroke((pts) => {
             if (!pts) return pts;
@@ -688,7 +832,9 @@ const PageLayer = ({
       onPointerUp={(e) => {
         if (!start.current) return;
         const p = point(e);
-        if (tool === "box") {
+        if (tool === "stamp") {
+          // position already updated while dragging
+        } else if (tool === "box") {
           const rect = between(start.current, p);
           const size = ref.current!.getBoundingClientRect();
           const tooSmall = rect.w * size.width < MIN_SELECTION_PX || rect.h * size.height < MIN_SELECTION_PX;
