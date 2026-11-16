@@ -1,0 +1,165 @@
+/**
+ * Search and social metadata for every page.
+ *
+ * Plain data only (no React), because it is shared by the app (to update the head on
+ * navigation) and by the build (to write the sitemap and a pre-rendered HTML file per
+ * page, so crawlers and link previews see the right title without running JavaScript).
+ */
+
+export const SITE_NAME = "PDF Editor";
+export const THEME_COLOR = "#f9f8f5";
+export const OG_IMAGE = "/og-image.png";
+
+export interface PageSeo {
+  path: string;
+  title: string;
+  description: string;
+  /** Short name used in breadcrumbs and structured data. */
+  name: string;
+}
+
+export const HOME_SEO: PageSeo = {
+  path: "/",
+  name: SITE_NAME,
+  title: "PDF Editor: free PDF tools that never upload your files",
+  description:
+    "Merge, split, compress, rotate, crop and watermark PDFs for free in your browser. Files are processed on your device and never uploaded. No sign-up.",
+};
+
+export const TOOL_SEO: PageSeo[] = [
+  {
+    path: "/merge",
+    name: "Merge PDF",
+    title: "Merge PDF: combine PDF files, free and private",
+    description:
+      "Combine several PDFs into one in the order you choose. Drag to reorder the files, then download. Runs in your browser, so nothing is uploaded.",
+  },
+  {
+    path: "/split",
+    name: "Split PDF",
+    title: "Split PDF: extract pages or split into files",
+    description:
+      "Pull out page ranges, split every N pages or save each page as its own PDF. Free, no sign-up, and your file never leaves your device.",
+  },
+  {
+    path: "/rotate",
+    name: "Rotate PDF",
+    title: "Rotate PDF: turn pages left, right or 180°",
+    description:
+      "Rotate every page of a PDF by 90° or 180° with a live preview, then download. Free and private: processing happens in your browser.",
+  },
+  {
+    path: "/compress",
+    name: "Compress PDF",
+    title: "Compress PDF: reduce PDF file size, free",
+    description:
+      "Shrink scanned and image-heavy PDFs with an adjustable quality setting. See the size saved before you download. No uploads, no account.",
+  },
+  {
+    path: "/watermark",
+    name: "Watermark",
+    title: "Add or remove a PDF watermark, free",
+    description:
+      "Add a text or image watermark to a PDF, or brush an existing watermark away with a live before/after preview. Files never leave your device.",
+  },
+  {
+    path: "/crop",
+    name: "Crop PDF",
+    title: "Crop PDF: trim page margins online, free",
+    description:
+      "Trim the margins off every page of a PDF and preview exactly what will be cut. Free, private and processed entirely in your browser.",
+  },
+  {
+    path: "/resize",
+    name: "Resize PDF",
+    title: "Resize PDF to A4, Letter, Legal or A3",
+    description:
+      "Fit every page of a PDF to A4, Letter, Legal or A3 while keeping its proportions. Free, no sign-up, and nothing is uploaded.",
+  },
+  {
+    path: "/invert",
+    name: "Invert PDF colors",
+    title: "Invert PDF colors: dark mode for PDFs, free",
+    description:
+      "Swap light and dark in a PDF for easier reading at night, with a live preview. Free and private: your file stays on your device.",
+  },
+];
+
+export const ALL_SEO: PageSeo[] = [HOME_SEO, ...TOOL_SEO];
+
+export const NOT_FOUND_SEO: PageSeo = {
+  path: "",
+  name: "Page not found",
+  title: "Page not found",
+  description: HOME_SEO.description,
+};
+
+export const seoForPath = (path: string) => ALL_SEO.find((p) => p.path === path) ?? null;
+
+/** "Merge PDF: …" → "Merge PDF: … | PDF Editor" (home keeps its own title). */
+export const fullTitle = (p: PageSeo) => (p.path === "/" ? p.title : `${p.title} | ${SITE_NAME}`);
+
+/** schema.org data for a page, as JSON-LD. `origin` may be "" when the site URL is unknown. */
+export function structuredData(p: PageSeo, origin: string) {
+  const url = origin + p.path;
+  const app = {
+    "@type": "WebApplication",
+    name: p.path === "/" ? SITE_NAME : p.name,
+    url,
+    description: p.description,
+    applicationCategory: "UtilitiesApplication",
+    operatingSystem: "Any (runs in a web browser)",
+    browserRequirements: "Requires JavaScript and a modern web browser.",
+    isAccessibleForFree: true,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  };
+  const graph: object[] = [app];
+  if (p.path !== "/") {
+    graph.push({
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: SITE_NAME, item: origin + "/" },
+        { "@type": "ListItem", position: 2, name: p.name, item: url },
+      ],
+    });
+  } else {
+    graph.push({ "@type": "WebSite", name: SITE_NAME, url });
+  }
+  return { "@context": "https://schema.org", "@graph": graph };
+}
+
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * The page-specific part of <head>, between <!--seo--> markers so the build can swap it
+ * per page. `origin` is the site's absolute URL, or "" when unknown (then absolute-only
+ * tags such as canonical are left out).
+ */
+export function renderHead(p: PageSeo, origin: string, { noindex = false } = {}) {
+  const url = origin + p.path;
+  const image = origin + OG_IMAGE;
+  const t = esc(fullTitle(p));
+  const d = esc(p.description);
+  const tags = [
+    `<title>${t}</title>`,
+    `<meta name="description" content="${d}" />`,
+    noindex ? `<meta name="robots" content="noindex" />` : `<meta name="robots" content="index, follow, max-image-preview:large" />`,
+    origin && !noindex ? `<link rel="canonical" href="${esc(url)}" />` : "",
+    `<meta property="og:type" content="website" />`,
+    `<meta property="og:site_name" content="${SITE_NAME}" />`,
+    `<meta property="og:locale" content="en_US" />`,
+    `<meta property="og:title" content="${t}" />`,
+    `<meta property="og:description" content="${d}" />`,
+    origin ? `<meta property="og:url" content="${esc(url)}" />` : "",
+    origin ? `<meta property="og:image" content="${esc(image)}" />` : "",
+    origin ? `<meta property="og:image:width" content="1200" />` : "",
+    origin ? `<meta property="og:image:height" content="630" />` : "",
+    origin ? `<meta property="og:image:alt" content="${SITE_NAME}: edit PDFs without sending them anywhere." />` : "",
+    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:title" content="${t}" />`,
+    `<meta name="twitter:description" content="${d}" />`,
+    origin ? `<meta name="twitter:image" content="${esc(image)}" />` : "",
+    `<script type="application/ld+json" id="ld-json">${JSON.stringify(structuredData(p, origin)).replace(/</g, "\u003c")}</script>`,
+  ].filter(Boolean);
+  return `<!--seo-->\n    ${tags.join("\n    ")}\n    <!--/seo-->`;
+}

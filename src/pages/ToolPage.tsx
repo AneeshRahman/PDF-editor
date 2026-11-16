@@ -23,6 +23,8 @@ import {
 import type { AreaSelection, ProgressCallback } from "../lib/pdf-operations";
 import { CATEGORIES, type ToolDef } from "../lib/tools";
 import { cn } from "../lib/utils";
+import { HOME_SEO, seoForPath } from "../lib/seo";
+import { useSeo } from "../lib/useSeo";
 
 
 export const ToolPage = ({ tool }: { tool: ToolDef }) => {
@@ -44,12 +46,7 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
 
   useEffect(() => clearHandoff(), []);
 
-  useEffect(() => {
-    document.title = `${tool.name} · PDF Editor`;
-    return () => {
-      document.title = "PDF Editor";
-    };
-  }, [tool.name]);
+  useSeo(seoForPath(`/${tool.id}`) ?? { ...HOME_SEO, path: `/${tool.id}`, name: tool.name, title: tool.name, description: tool.description });
 
   const addFiles = async (picked: File[]) => {
     setLoading(true);

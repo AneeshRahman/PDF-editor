@@ -1,18 +1,32 @@
 import { cn } from "../lib/utils";
 
-/** Logo mark: a page with a folded corner; the fold is the brand accent. */
-export const LogoMark = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" className={cn("h-6 w-6", className)}>
-    <path d="M5 2.75h9.5L19.25 7.5v13.75H5z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-    <path d="M14.5 2.75V7.5h4.75z" fill="hsl(var(--brand))" stroke="hsl(var(--brand))" strokeWidth="1.6" strokeLinejoin="round" />
-    <path d="M8.5 12h7M8.5 15.5h7M8.5 19h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+/**
+ * The logo mark: a sheet of paper cut into a "P". The page's folded corner (vermilion)
+ * sits at the top right of the letter's bowl, and a notch at the bottom right turns the
+ * sheet into the stem. Drawn on a 32-unit grid so it stays crisp down to 16px.
+ *
+ * Colours follow the theme: the tile is the text colour, the letter is the background.
+ */
+export const LOGO_PATHS = {
+  /** The "P": page outline with the fold cut off, the bowl's counter and the stem notch. */
+  letter: "M9 7H19L23 11V19H16V25H9Z M13 11V15H17.5V11Z",
+  /** The folded-over corner. */
+  fold: "M19 7V11H23Z",
+};
+
+export const LogoMark = ({ className, title }: { className?: string; title?: string }) => (
+  <svg viewBox="0 0 32 32" role={title ? "img" : undefined} aria-hidden={title ? undefined : true} className={cn("h-7 w-7", className)}>
+    {title && <title>{title}</title>}
+    <rect width="32" height="32" rx="7" fill="currentColor" />
+    <path d={LOGO_PATHS.letter} fill="hsl(var(--background))" fillRule="evenodd" />
+    <path d={LOGO_PATHS.fold} fill="hsl(var(--brand))" />
   </svg>
 );
 
 export const Wordmark = () => (
-  <span className="flex items-center gap-2">
+  <span className="flex items-center gap-2.5">
     <LogoMark />
-    <span className="text-[15px] font-semibold tracking-[-0.01em]">PDF Editor</span>
+    <span className="text-[15px] font-semibold tracking-[-0.02em]">PDF Editor</span>
   </span>
 );
 

@@ -6,6 +6,8 @@ import { CATEGORIES, TOOLS, type ToolCategory, type ToolDef } from "../lib/tools
 import { formatSize, isPdfFile, loadPdfFile, setHandoff, MAX_FILE_MB, type LoadedPdf } from "../lib/files";
 import { CropMarks } from "../components/brand";
 import { cn } from "../lib/utils";
+import { HOME_SEO } from "../lib/seo";
+import { useSeo } from "../lib/useSeo";
 
 type Filter = "all" | ToolCategory;
 
@@ -24,6 +26,7 @@ const Home = () => {
   const [ready, setReady] = useState<LoadedPdf[]>([]);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
+  useSeo(HOME_SEO);
 
   // The header's "Tools" link points at /#tools.
   useEffect(() => {

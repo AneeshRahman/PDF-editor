@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .tile { fill: #181715; }
+    .letter { fill: #f9f8f5; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #f9f8f5; }
+      .letter { fill: #181715; }
+    }
+  </style>
+  <rect class="tile" width="32" height="32" rx="7" />
+  <path class="letter" fill-rule="evenodd" d="M9 7H19L23 11V19H16V25H9Z M13 11V15H17.5V11Z" />
+  <path fill="#e94520" d="M19 7V11H23Z" />
+</svg>
