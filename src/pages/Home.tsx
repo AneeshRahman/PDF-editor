@@ -181,21 +181,9 @@ const Home = () => {
       {/* ------------------------------ Tools ----------------------------- */}
       <section id="tools" className="scroll-mt-14 overflow-hidden">
         <div className="container relative">
-          {/* Column guides: faint lines on the grid's columns, running the full height of
+          {/* Edge guides: faint lines on the grid's outer edges, running the full height of
               the section, past the cells (like layout guides in a design tool). */}
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-[1.25rem] inset-y-0 grid grid-cols-2 lg:grid-cols-4">
-            {[0, 1, 2, 3].map((k) => (
-              <span
-                key={k}
-                className={cn(
-                  "border-l border-border/60",
-                  (k === 1 || k === 3) && "border-r",
-                  k === 1 && "lg:border-r-0",
-                  k >= 2 && "hidden lg:block"
-                )}
-              />
-            ))}
-          </div>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-[1.25rem] inset-y-0 border-x border-border/60" />
           <div className="relative flex flex-col gap-6 px-4 py-10 sm:px-6 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="label-mono">Index</p>
