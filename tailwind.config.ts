@@ -4,6 +4,9 @@ import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: "class",
+  // Hover styles only apply on devices with a real pointer, so a tap on a phone
+  // doesn't leave an element stuck in its hover state.
+  future: { hoverOnlyWhenSupported: true },
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
   theme: {
@@ -99,6 +102,11 @@ export default {
   },
   plugins: [
     tailwindcssAnimate,
+    // `can-hover:` targets devices with a mouse. Controls revealed on hover use
+    // `can-hover:opacity-0` so they stay visible on touch screens.
+    plugin(function ({ addVariant }) {
+      addVariant("can-hover", "@media (hover: hover) and (pointer: fine)");
+    }),
     plugin(function ({ addBase }) {
       addBase({
         ":root": {

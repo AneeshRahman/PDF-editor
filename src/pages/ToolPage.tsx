@@ -188,7 +188,9 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
               onAdd={addFiles}
             />
           ) : (
-            <div className="h-[calc(100vh-8rem)] min-h-[500px]">
+            // On phones the panel sits below the preview, so keep the preview short
+            // enough that the settings start on the same screen.
+            <div className="h-[60svh] min-h-[340px] lg:h-[calc(100vh-8rem)] lg:min-h-[500px]">
               <PDFPreview
                 pdfData={file.bytes}
                 {...preview}

@@ -194,7 +194,7 @@ export const OrganizeWorkspace = (props: ToolPanelProps) => {
               </div>
             </div>
             {/* Page actions */}
-            <div className="flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-wrap justify-center gap-0.5 transition-opacity can-hover:opacity-0 focus-within:opacity-100 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
               {[
                 { label: "Move left", icon: ChevronLeft, off: i === 0, fn: () => act(it.key, (l, j) => move(l, j, j - 1)) },
                 { label: "Rotate left", icon: RotateCcw, fn: () => act(it.key, (l, j) => l.map((x, k) => (k === j ? { ...x, rotation: (x.rotation + 270) % 360 } : x))) },
@@ -210,7 +210,7 @@ export const OrganizeWorkspace = (props: ToolPanelProps) => {
                   aria-label={`${label} (page ${i + 1})`}
                   disabled={off}
                   onClick={fn}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                  className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 can-hover:p-1"
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </button>

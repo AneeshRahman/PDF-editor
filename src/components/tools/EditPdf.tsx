@@ -25,12 +25,12 @@ type Selection = { type: "run"; id: string } | { type: "obj"; id: string } | nul
 type ShapeObject = Extract<EditObject, { kind: ShapeKind }>;
 
 
-const TOOLS: { id: Tool; label: string; icon: typeof Type; hint: string }[] = [
-  { id: "select", label: "Select", icon: MousePointer2, hint: "Click text to edit it; drag objects to move them" },
-  { id: "text", label: "Text", icon: Type, hint: "Click on the page to add text" },
-  { id: "rect", label: "Rectangle", icon: Square, hint: "Drag on the page to draw" },
-  { id: "ellipse", label: "Ellipse", icon: Circle, hint: "Drag on the page to draw" },
-  { id: "line", label: "Line", icon: Minus, hint: "Drag on the page to draw" },
+const TOOLS: { id: Tool; label: string; short: string; icon: typeof Type; hint: string }[] = [
+  { id: "select", label: "Select", short: "Select", icon: MousePointer2, hint: "Click text to edit it; drag objects to move them" },
+  { id: "text", label: "Text", short: "Text", icon: Type, hint: "Click on the page to add text" },
+  { id: "rect", label: "Rectangle", short: "Rect", icon: Square, hint: "Drag on the page to draw" },
+  { id: "ellipse", label: "Ellipse", short: "Oval", icon: Circle, hint: "Drag on the page to draw" },
+  { id: "line", label: "Line", short: "Line", icon: Minus, hint: "Drag on the page to draw" },
 ];
 const FONTS: StampFont[] = ["Helvetica", "Times", "Courier"];
 const SWATCHES = ["#111111", "#ffffff", "#e94520", "#1565c0", "#2e7d32", "#f9a825", "#6a1b9a"];
@@ -126,7 +126,13 @@ const EditOverlay = (p: OverlayProps) => {
       ref={svgRef}
       data-testid={`edit-layer-${p.page}`}
       viewBox={`0 0 ${p.w} ${p.h}`}
-      className={cn("absolute inset-0 h-full w-full touch-none select-none", p.tool === "select" ? "cursor-default" : "cursor-crosshair")}
+      // In Select mode a swipe on the page scrolls it (objects block that themselves, so
+      // they can still be dragged); the drawing tools take every touch.
+      className={cn(
+        "absolute inset-0 h-full w-full select-none",
+        p.tool === "select" ? "cursor-default touch-pan-x touch-pan-y" : "cursor-crosshair touch-none"
+      )}
+      onPointerCancel={() => (action.current = null)}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         const { x, y } = pt(e);
@@ -254,27 +260,26 @@ const EditOverlay = (p: OverlayProps) => {
               width={b.w + 4}
               height={b.h + 4}
               fill="transparent"
-              className={cn(p.tool === "select" ? "cursor-move" : "pointer-events-none", isSel ? "stroke-brand" : "stroke-transparent")}
+              className={cn(p.tool === "select" ? "cursor-move touch-none" : "pointer-events-none", isSel ? "stroke-brand" : "stroke-transparent")}
               strokeWidth={1}
               strokeDasharray="3 2"
               onPointerDown={(ev) => startMove(ev, o)}
               onDoubleClick={() => o.kind === "text" && p.focusText()}
             />
             {isSel && o.kind !== "text" && (
-              <rect
+              <g
                 data-handle={o.id}
-                x={o.x2 - 3.5}
-                y={o.y2 - 3.5}
-                width={7}
-                height={7}
-                className="cursor-nwse-resize fill-background stroke-brand"
-                strokeWidth={1.2}
+                className="cursor-nwse-resize touch-none"
                 onPointerDown={(ev) => {
                   ev.stopPropagation();
                   action.current = { kind: "resize", id: o.id };
                   svgRef.current!.setPointerCapture(ev.pointerId);
                 }}
-              />
+              >
+                {/* Invisible, finger-sized hit area around the small visible handle. */}
+                <rect x={o.x2 - 18} y={o.y2 - 18} width={36} height={36} fill="transparent" />
+                <rect x={o.x2 - 3.5} y={o.y2 - 3.5} width={7} height={7} className="fill-background stroke-brand" strokeWidth={1.2} />
+              </g>
             )}
           </g>
         );
@@ -473,7 +478,7 @@ export const EditPdfPanel = ({ files, process, setPreview }: ToolPanelProps) => 
       {/* Tools */}
       <div className="space-y-2">
         <div className="grid grid-cols-5 gap-1 rounded-lg bg-muted p-1" role="radiogroup" aria-label="Edit tool">
-          {TOOLS.map(({ id, label, icon: Icon }) => (
+          {TOOLS.map(({ id, label, short, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -482,9 +487,13 @@ export const EditPdfPanel = ({ files, process, setPreview }: ToolPanelProps) => 
               aria-label={label}
               title={label}
               onClick={() => setTool(id)}
-              className={cn("flex h-9 items-center justify-center rounded-md transition", tool === id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              className={cn(
+                "flex h-12 flex-col items-center justify-center gap-0.5 rounded-md transition",
+                tool === id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
             >
               <Icon className="h-4 w-4" />
+              <span className="text-[10px] font-medium leading-none" aria-hidden="true">{short}</span>
             </button>
           ))}
         </div>

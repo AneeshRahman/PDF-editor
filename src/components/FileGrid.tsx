@@ -60,7 +60,7 @@ export const FileGrid = ({ files, onReorder, onRemove, onAdd }: FileGridProps) =
           <button
             type="button"
             onClick={() => onRemove(file.id)}
-            className="absolute right-2 top-2 rounded-full bg-background/90 p-1 text-muted-foreground opacity-0 shadow transition hover:text-destructive group-hover:opacity-100 focus:opacity-100"
+            className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow can-hover:p-1 can-hover:opacity-0 transition hover:text-destructive group-hover:opacity-100 focus:opacity-100"
             aria-label={`Remove ${file.name}`}
           >
             <X className="h-3.5 w-3.5" />
@@ -77,12 +77,12 @@ export const FileGrid = ({ files, onReorder, onRemove, onAdd }: FileGridProps) =
             {file.pageCount} page{file.pageCount === 1 ? "" : "s"} · {formatSize(file.bytes.byteLength)}
           </p>
 
-          <div className="flex gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+          <div className="flex gap-1 transition can-hover:opacity-0 group-hover:opacity-100 focus-within:opacity-100">
             <button
               type="button"
               disabled={i === 0}
               onClick={() => onReorder(move(files, i, i - 1))}
-              className="rounded p-1 hover:bg-muted disabled:opacity-30"
+              className="rounded p-2 hover:bg-muted disabled:opacity-30 can-hover:p-1"
               aria-label="Move left"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -91,7 +91,7 @@ export const FileGrid = ({ files, onReorder, onRemove, onAdd }: FileGridProps) =
               type="button"
               disabled={i === files.length - 1}
               onClick={() => onReorder(move(files, i, i + 1))}
-              className="rounded p-1 hover:bg-muted disabled:opacity-30"
+              className="rounded p-2 hover:bg-muted disabled:opacity-30 can-hover:p-1"
               aria-label="Move right"
             >
               <ChevronRight className="h-4 w-4" />
