@@ -21,7 +21,13 @@ function seo(): Plugin {
       outDir = path.resolve(config.root, config.build.outDir);
     },
     transformIndexHtml(html) {
-      return html.replace(SEO_BLOCK, renderHead(HOME_SEO, SITE_URL));
+      // Optional ownership-verification tags for Google Search Console / Bing Webmaster Tools.
+      const verify = [
+        process.env.GOOGLE_SITE_VERIFICATION && `<meta name="google-site-verification" content="${process.env.GOOGLE_SITE_VERIFICATION}" />`,
+        process.env.BING_SITE_VERIFICATION && `<meta name="msvalidate.01" content="${process.env.BING_SITE_VERIFICATION}" />`,
+      ].filter(Boolean);
+      const head = renderHead(HOME_SEO, SITE_URL);
+      return html.replace(SEO_BLOCK, verify.length ? head.replace("<!--/seo-->", `${verify.join("\n    ")}\n    <!--/seo-->`) : head);
     },
     closeBundle() {
       const indexFile = path.join(outDir, "index.html");

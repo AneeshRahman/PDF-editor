@@ -26,7 +26,7 @@ export const LogoMark = ({ className, title }: { className?: string; title?: str
 export const Wordmark = () => (
   <span className="flex items-center gap-2.5">
     <LogoMark />
-    <span className="text-[15px] font-semibold tracking-[-0.02em]">PDF Editor</span>
+    <span className="text-[15px] font-semibold tracking-[-0.02em]">Yours PDF</span>
   </span>
 );
 

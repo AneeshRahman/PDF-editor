@@ -6,7 +6,7 @@
  * page, so crawlers and link previews see the right title without running JavaScript).
  */
 
-export const SITE_NAME = "PDF Editor";
+export const SITE_NAME = "Yours PDF";
 export const THEME_COLOR = "#f9f8f5";
 export const OG_IMAGE = "/og-image.png";
 
@@ -21,7 +21,7 @@ export interface PageSeo {
 export const HOME_SEO: PageSeo = {
   path: "/",
   name: SITE_NAME,
-  title: "Free PDF editor: unlimited edits, any file size",
+  title: "Yours PDF: free PDF editor with unlimited edits",
   description:
     "Edit PDF text, merge, split, organize, compress or shrink to a target size, and add or remove watermarks. Unlimited edits, any file size, no uploads.",
 };
@@ -117,7 +117,7 @@ export const NOT_FOUND_SEO: PageSeo = {
 
 export const seoForPath = (path: string) => ALL_SEO.find((p) => p.path === path) ?? null;
 
-/** "Merge PDF: …" → "Merge PDF: … | PDF Editor" (home keeps its own title). */
+/** "Merge PDF: …" → "Merge PDF: … | Yours PDF" (home keeps its own title). */
 export const fullTitle = (p: PageSeo) => (p.path === "/" ? p.title : `${p.title} | ${SITE_NAME}`);
 
 /** schema.org data for a page, as JSON-LD. `origin` may be "" when the site URL is unknown. */

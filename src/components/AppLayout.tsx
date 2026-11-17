@@ -10,7 +10,7 @@ export const AppLayout = () => (
   <div className="flex min-h-screen flex-col bg-background">
     <header className="sticky top-0 z-40 border-b border-border bg-background">
       <div className="container flex h-14 items-center gap-8">
-        <Link to="/" aria-label="PDF Editor home" className="shrink-0">
+        <Link to="/" aria-label="Yours PDF home" className="shrink-0">
           <Wordmark />
         </Link>
         <nav className="hidden h-full items-stretch gap-6 text-sm md:flex">
