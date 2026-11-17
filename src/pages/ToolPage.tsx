@@ -23,7 +23,6 @@ import {
 import type { AreaSelection, ProgressCallback } from "../lib/pdf-operations";
 import { CATEGORIES, type ToolDef } from "../lib/tools";
 import { cn } from "../lib/utils";
-import { recordEdit } from "../lib/stats";
 import { HOME_SEO, seoForPath } from "../lib/seo";
 import { useSeo } from "../lib/useSeo";
 
@@ -74,7 +73,6 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
       const out = await op((page, total) => setProgress((page / total) * 100));
       const inputSize = files.reduce((n, f) => n + f.bytes.byteLength, 0);
       setResult({ files: out, inputSize });
-      recordEdit(out.length, inputSize);
       window.scrollTo({ top: 0 });
     } catch (err) {
       console.error(err);
@@ -97,7 +95,6 @@ export const ToolPage = ({ tool }: { tool: ToolDef }) => {
     setProgress(null);
     try {
       const value = await op((page, total) => setProgress((page / total) * 100));
-      recordEdit(1, files.reduce((n, f) => n + f.bytes.byteLength, 0));
       return value;
     } catch (err) {
       console.error(err);

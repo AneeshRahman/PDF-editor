@@ -21,9 +21,9 @@ export interface PageSeo {
 export const HOME_SEO: PageSeo = {
   path: "/",
   name: SITE_NAME,
-  title: "PDF Editor: free, unlimited PDF tools with no uploads",
+  title: "Free PDF editor: unlimited edits, any file size",
   description:
-    "Edit PDFs free, unlimited, any file size: merge, split, compress, crop, add or remove watermarks, or make a PDF black & white. Files never leave your device.",
+    "Edit PDF text, merge, split, organize, compress or shrink to a target size, and add or remove watermarks. Unlimited edits, any file size, no uploads.",
 };
 
 export const TOOL_SEO: PageSeo[] = [
@@ -175,7 +175,7 @@ export function renderHead(p: PageSeo, origin: string, { noindex = false } = {})
     origin ? `<meta property="og:image" content="${esc(image)}" />` : "",
     origin ? `<meta property="og:image:width" content="1200" />` : "",
     origin ? `<meta property="og:image:height" content="630" />` : "",
-    origin ? `<meta property="og:image:alt" content="${SITE_NAME}: free, unlimited PDF tools. No file size limit, no uploads." />` : "",
+    origin ? `<meta property="og:image:alt" content="${SITE_NAME}: free PDF editor with unlimited edits, any file size and no uploads." />` : "",
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`,

@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, ArrowUpRight, Loader2, X } from "lucide-react";
@@ -8,16 +8,6 @@ import { CropMarks } from "../components/brand";
 import { cn } from "../lib/utils";
 import { HOME_SEO } from "../lib/seo";
 import { useSeo } from "../lib/useSeo";
-import { getStats, onStatsChange } from "../lib/stats";
-
-// Snapshot cached by value so useSyncExternalStore sees a stable object.
-let statsCache = getStats();
-const subscribeStats = (fn: () => void) =>
-  onStatsChange(() => {
-    statsCache = getStats();
-    fn();
-  });
-const readStats = () => statsCache;
 
 type Filter = "all" | ToolCategory;
 
@@ -50,7 +40,6 @@ const Home = () => {
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
   useSeo(HOME_SEO);
-  const stats = useSyncExternalStore(subscribeStats, readStats);
 
   // The header's "Tools" link points at /#tools.
   useEffect(() => {
@@ -103,15 +92,15 @@ const Home = () => {
               sending them <span className="text-muted-foreground">anywhere.</span>
             </h1>
             <p className="mt-6 max-w-[34rem] text-lg leading-relaxed text-muted-foreground">
-              Merge, split, compress, and add or remove watermarks on your own device. No file size limits, no
-              uploads, no account, and no cap on how much you edit.
+              Edit text, merge, split, organize, compress and watermark PDFs on your own device. Unlimited edits,
+              any file size, no uploads and no account.
             </p>
 
             <dl className="mt-10 grid max-w-md grid-cols-3 border-y border-border">
               {[
                 [pad(TOOLS.length), "Tools"],
                 ["∞", "File size"],
-                [pad(stats.files), "Edited here"],
+                ["∞", "Edits"],
               ].map(([value, label], i) => (
                 <div key={label} className={cn("py-4", i > 0 && "border-l border-border pl-4")}>
                   <dt className="label-mono">{label}</dt>
@@ -130,9 +119,7 @@ const Home = () => {
             </dl>
             <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
-              {stats.files
-                ? `${formatSize(stats.bytes)} of PDFs edited on this device. 0 bytes uploaded.`
-                : "Counted on this device only. Nothing is ever uploaded."}
+              No limits on file size or how often you edit. Nothing is ever uploaded.
             </p>
           </div>
 
