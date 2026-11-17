@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import path from "path";
 import fs from "fs";
 import react from "@vitejs/plugin-react";
-import { HOME_SEO, TOOL_SEO, renderHead } from "./src/lib/seo";
+import { HOME_SEO, NOT_FOUND_SEO, TOOL_SEO, renderHead } from "./src/lib/seo";
 
 /**
  * The site's public URL, used for canonical links, social images and the sitemap.
@@ -40,6 +40,10 @@ function seo(): Plugin {
       for (const page of TOOL_SEO) {
         fs.writeFileSync(path.join(outDir, `${page.path.slice(1)}.html`), html.replace(SEO_BLOCK, renderHead(page, SITE_URL)));
       }
+
+      // Served by Vercel (with a real 404 status) for unknown URLs; the app then shows its
+      // styled "Page not found". Marked noindex so it never appears in search results.
+      fs.writeFileSync(path.join(outDir, "404.html"), html.replace(SEO_BLOCK, renderHead(NOT_FOUND_SEO, SITE_URL, { noindex: true })));
 
       const robots = ["User-agent: *", "Allow: /", ...(SITE_URL ? ["", `Sitemap: ${SITE_URL}/sitemap.xml`] : [])];
       fs.writeFileSync(path.join(outDir, "robots.txt"), robots.join("\n") + "\n");
