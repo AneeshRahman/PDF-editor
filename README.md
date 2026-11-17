@@ -1,73 +1,113 @@
-# React + TypeScript + Vite
+<div align="center">
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+<img src="public/favicon.svg" width="64" height="64" alt="Yours PDF logo" />
 
-Currently, two official plugins are available:
+# Yours PDF
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+**A free PDF editor that runs entirely in your browser.**
+Unlimited edits, any file size, and your files are never uploaded.
 
-## React Compiler
+[**Open Yours PDF →**](https://yours-pdf.vercel.app)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+<img src="public/og-image.png" alt="Yours PDF: edit PDFs without sending them anywhere" width="720" />
 
-## Expanding the ESLint configuration
+</div>
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Why
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Most online PDF tools upload your document to a server, cap the file size, and limit how many times you can use them. Yours PDF does all the work on your own device, with JavaScript in the browser, so:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- **Private:** files never leave your computer or phone. There is no server, account or tracking of your documents.
+- **Unlimited:** no file size limit (only your device's memory) and no cap on how many edits you make.
+- **Fast:** nothing to upload or download in between steps, and results can be passed straight to the next tool.
+
+## Tools
+
+| Tool | What it does |
+|---|---|
+| **Edit PDF** | Click any text to see its font, size and colour; edit or remove it; add new text; draw rectangles, ellipses and lines in any colour. |
+| **Watermark** | Brush over a watermark to remove it (vector watermarks are removed from the PDF itself), or add a text or image watermark with live preview and a before/after slider. |
+| **Merge PDF** | Combine several PDFs in the order you choose. |
+| **Split PDF** | Extract page ranges, split every N pages, or save each page as its own file. |
+| **Organize PDF** | Reorder pages by dragging, rotate, duplicate or delete them, and insert blank pages or pages from another PDF. |
+| **Rotate PDF** | Rotate all pages or a page range. |
+| **Compress PDF** | See the estimated file size for each setting before compressing. |
+| **PDF Size Changer** | Fit a PDF under a target size such as 200 KB or 2 MB, or pad a small file up to it. |
+| **Crop PDF** | Trim margins, linked on all sides or set per side, with a live preview. |
+| **Resize PDF** | A4, A5, A3, Letter, Legal, Tabloid or a custom size in mm, inches or points, with a to-scale size reference. |
+| **Adjust Colors** | Grayscale, black & white, invert, or fine-tune brightness, contrast and saturation. |
+
+The editor also has Figma-style zoom and pan (Ctrl/⌘ + scroll, pinch, Space + drag), a live preview for every tool, and light and dark themes.
+
+## How it works
+
+- **Rendering:** [pdf.js](https://github.com/mozilla/pdf.js) draws pages into canvases, re-rendering sharply at the current zoom and only near the screen.
+- **Editing:** [pdf-lib](https://github.com/Hopding/pdf-lib) changes the PDF itself (merge, split, rotate, crop, resize, watermarks, text and shapes), so text stays real, selectable text.
+- **Watermark removal:** first looks for the watermark in the PDF's own drawing instructions and switches it off there; anything left (e.g. in a scan) is cleaned pixel by pixel, treating the watermark as a see-through layer.
+- **Text editing:** fonts inside PDFs usually contain only the letters already used, so edited text is redrawn in the closest standard font (Helvetica, Times or Courier) at the original size, position and colour.
+- **Size estimates:** a few sample pages are compressed at several settings and scaled up to the full document.
+
+## Tech stack
+
+React 18 · TypeScript · Vite · Tailwind CSS · Radix UI · pdf.js · pdf-lib · JSZip. Deployed on Vercel.
+
+## Run it locally
+
+Requires Node.js 18 or newer.
+
+```bash
+git clone https://github.com/AneeshRahman/PDF-editor.git
+cd PDF-editor
+npm install
+npm run dev        # http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+| Command | |
+|---|---|
+| `npm run dev` | Start the development server |
+| `npm run build` | Type-check and build for production into `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run lint` | Run ESLint |
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Project structure
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+  pages/            Home, tool page, 404
+  components/       Layout, PDF preview (zoom, pan, overlays), results screen
+    tools/          One panel per tool (Edit PDF, Watermark, Organize, ...)
+  lib/
+    tools.ts        Tool registry: name, icon, panel, related tools
+    pdf-operations.ts   Merge, split, rotate, crop, resize, compress, target size
+    pdf-edit.ts         Text detection (font, size, colour) and edits
+    watermark.ts        Pixel-level watermark detection and cleaning
+    vector-watermark.ts Removes watermarks from the PDF's drawing instructions
+    stamp.ts            Adding text or image watermarks
+    seo.ts              Titles, descriptions and structured data per page
+```
+
+## Deploying
+
+The build pre-renders an HTML file per tool (with its own title, description and social tags) and writes `sitemap.xml`, `robots.txt` and `404.html`. Optional environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `SITE_URL` | Public URL for canonical links, the sitemap and social images. Defaults to `https://yours-pdf.vercel.app`. |
+| `GOOGLE_SITE_VERIFICATION` | Google Search Console ownership tag. |
+| `BING_SITE_VERIFICATION` | Bing Webmaster Tools ownership tag. |
+
+## Limitations
+
+- Edited text uses the closest standard font, and characters outside Western European languages can't be typed into it.
+- Compress, PDF Size Changer and Adjust Colors save pages as images, so text in the result isn't selectable.
+- Very large files are limited by your device's memory.
+
+## Author
+
+Made by [@aneeshRahman](https://github.com/aneeshRahman/). Issues and suggestions are welcome.
+
+## License
+
+[MIT](LICENSE)
